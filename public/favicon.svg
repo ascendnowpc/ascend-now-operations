@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Dark navy circle background -->
+  <circle cx="50" cy="50" r="50" fill="#273267"/>
+  <!-- White A shape -->
+  <path fill="white" d="M22 76 L38 24 L62 24 L78 76 L66 76 L61 56 L39 56 L34 76 Z"/>
+  <rect x="41" y="50" width="18" height="7" fill="#273267"/>
+  <!-- Light blue arrow -->
+  <path fill="#4FAEE5" d="M27 66 L48 52 L36 40 L40 52 Z"/>
+  <polygon fill="#4FAEE5" points="48,46 66,52 48,58 51,52"/>
+</svg>

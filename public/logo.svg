@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50">
+  <!-- Icon part -->
+  <!-- White A shape -->
+  <path fill="white" d="M4 44 L15 6 L33 6 L44 44 L37 44 L34 30 L14 30 L11 44 Z"/>
+  <rect x="16" y="25" width="16" height="6" fill="#273267"/>
+  <!-- Light blue arrow -->
+  <path fill="#4FAEE5" d="M7 37 L21 27 L13 18 L16 27 Z"/>
+  <polygon fill="#4FAEE5" points="21,23 34,28 21,33 23,28"/>
+  <!-- Text: Ascend -->
+  <text x="54" y="34" font-family="Poppins, system-ui, sans-serif" font-size="22" font-weight="800" fill="white">Ascend</text>
+  <!-- Text: NOW -->
+  <text x="147" y="34" font-family="Poppins, system-ui, sans-serif" font-size="22" font-weight="800" fill="#4FAEE5">NOW</text>
+</svg>

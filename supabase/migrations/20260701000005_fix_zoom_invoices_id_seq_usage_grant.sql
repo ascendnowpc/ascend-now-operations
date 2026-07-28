@@ -1,0 +1,12 @@
+-- zoom_invoices.id uses a plain sequence default (nextval('zoom_invoices_id_seq')),
+-- not an IDENTITY column, so the earlier table-level GRANT (SELECT/INSERT/
+-- UPDATE/DELETE on zoom_invoices, see 20260701000001) was not enough —
+-- Postgres also requires explicit USAGE on the underlying sequence for a
+-- non-owner role to call nextval() during INSERT. This was missing entirely,
+-- causing "permission denied for sequence zoom_invoices_id_seq" on every
+-- upload attempt (confirmed live via a real teacher hitting it in the UI).
+--
+-- students.id has the same "plain sequence, not identity" shape
+-- (students_num_seq) but was already correctly granted, so it was never
+-- affected — this migration only had to fix zoom_invoices_id_seq.
+GRANT USAGE, SELECT ON SEQUENCE public.zoom_invoices_id_seq TO authenticated, service_role;
