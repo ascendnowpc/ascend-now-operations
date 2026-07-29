@@ -280,8 +280,10 @@ export interface CourseType {
 }
 
 export interface Admin {
-  id: number;
+  id: string; // e.g. "ADMS26-1" (mnemonic text id, converted from bigint 2026-07-29)
   user_id: string;
+  phone_number: string | null;
+  country: string | null;
   created_at: string;
   updated_at: string;
 }
