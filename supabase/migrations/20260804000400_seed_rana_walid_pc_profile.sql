@@ -32,7 +32,16 @@
 --
 -- 4. `photo_url` is left NULL — the card's headshot has to be uploaded to the
 --    public `pc-profiles` bucket through the UI; it cannot be created from SQL.
---    The card falls back to her initials until then.
+--    The card falls back to her initials until then. (`public/pcstudent.jpg` is
+--    a Performance Coach role infographic, not her headshot.)
+--
+-- 4b. `institution_logo_urls` point at assets already shipped in `public/`
+--    (`worldacademy.png`, `jis.png`, `nyu.png`), served at the site root. The
+--    column's doc comment describes full URLs into the `pc-profiles` bucket,
+--    but PcProfileCard renders these through a plain `<img src={src}>`, so a
+--    root-relative path resolves against the same origin and works. Using the
+--    bundled assets keeps the logos versioned with the repo instead of
+--    depending on a separate bucket upload.
 --
 -- 5. The responsibilities timeline renders `heading` bold and `text` small
 --    underneath, so each of the four supplied bullets keeps its full sentence
@@ -53,7 +62,7 @@ set
       "student_name": "Ariel F",
       "subject": "MYP 4 Math",
       "institutions": "World Academy",
-      "institution_logo_urls": [],
+      "institution_logo_urls": ["/worldacademy.png"],
       "score_before": "3",
       "score_after": "6",
       "score_scale": "8",
@@ -66,7 +75,7 @@ set
       "student_name": "Tobias B",
       "subject": "AP Calculus BC",
       "institutions": "JIS · NYU",
-      "institution_logo_urls": [],
+      "institution_logo_urls": ["/jis.png", "/nyu.png"],
       "score_before": "2",
       "score_after": "5",
       "score_scale": "5",
