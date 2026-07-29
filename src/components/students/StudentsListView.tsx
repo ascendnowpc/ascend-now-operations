@@ -9,7 +9,9 @@ import { useTeachers } from "../../hooks/useTeachers";
 import { usePcAssignments } from "../../hooks/usePcAssignments";
 import { useUsers } from "../../hooks/useUsers";
 import { supabase } from "../../lib/supabaseClient";
-import type { PackageTopup, Student, StudentPackage } from "../../types/database";
+import { StudentStatusBadge, StudentStatusMenu } from "./StudentStatusControls";
+import { STUDENT_STATUSES, STUDENT_STATUS_LABEL, normalizeStudentStatus } from "../../utils/studentStatus";
+import type { PackageTopup, Student, StudentPackage, StudentStatus } from "../../types/database";
 
 type PackageWithTopups = StudentPackage & { package_topups: PackageTopup[] };
 
@@ -38,7 +40,11 @@ const PACKAGE_STATUS_LABEL: Record<PackageStatus, string> = {
  *   - `children`, an optional slot rendered between the header and the
  *     search/filter card (currently unused now the PC self-assign flow is
  *     gone, kept so a role can slot in extra UI without the shared view
- *     needing to know about it).
+ *     needing to know about it);
+ *   - `canEditStatus`, which rows offer the Active / On pause / Completed
+ *     menu — an admin may change any student's status, a coach only that of a
+ *     student currently assigned to them (the `set_student_status` RPC enforces
+ *     the same rule server-side).
  * Everything else — every column, the search fields, the country/package
  * filters, and the package-status computation — is identical.
  */
@@ -51,6 +57,7 @@ export function StudentsListView({
   emptyMessage,
   children,
   showPcFilter = true,
+  canEditStatus = () => true,
 }: {
   title: string;
   description: string;
@@ -66,11 +73,13 @@ export function StudentsListView({
    * already assigned to that one coach, so filtering by coach is pointless.
    */
   showPcFilter?: boolean;
+  /** Whether this row's status can be changed by the current user. */
+  canEditStatus?: (studentId: string) => boolean;
 }) {
   const navigate = useNavigate();
-  const { students: allStudents, loading } = useStudents();
+  const { students: allStudents, loading, refetch: refetchStudents } = useStudents();
   const { teachers } = useTeachers();
-  const { getPcForStudent } = usePcAssignments();
+  const { getPcForStudent, getLatestPcForStudent, refetch: refetchAssignments } = usePcAssignments();
   const { users } = useUsers();
 
   const students = useMemo(
@@ -81,6 +90,17 @@ export function StudentsListView({
   const teacherLookup = new Map(teachers.map((t) => [t.id, `${t.first_name} ${t.last_name ?? ""}`.trim()]));
   const usernameByUserId = new Map(users.map((u) => [u.id, u.username]));
 
+  // Completing a student unassigns them from their coach, so their active
+  // assignment is gone by the time they land in the Completed category. Fall
+  // back to the last coach they had, otherwise every completed student would
+  // read as "Unassigned" and drop out of their own coach's PC filter.
+  function effectivePcForStudent(s: Student): string | null {
+    const active = getPcForStudent(s.id);
+    if (active != null) return active;
+    return normalizeStudentStatus(s.status) === "completed" ? getLatestPcForStudent(s.id) : null;
+  }
+
+  const [statusFilter, setStatusFilter] = useState<StudentStatus>("active");
   const [search, setSearch] = useState("");
   const [countryFilter, setCountryFilter] = useState("");
   const [packageFilter, setPackageFilter] = useState<PackageStatus | "">("");
@@ -161,7 +181,7 @@ export function StudentsListView({
     const ids = new Set<string>();
     let hasUnassigned = false;
     for (const s of students) {
-      const pcId = getPcForStudent(s.id);
+      const pcId = effectivePcForStudent(s);
       if (pcId != null) ids.add(pcId);
       else hasUnassigned = true;
     }
@@ -169,7 +189,8 @@ export function StudentsListView({
       .map((id) => ({ id, name: teacherLookup.get(id) ?? `#${id}` }))
       .sort((a, b) => a.name.localeCompare(b.name));
     return { list, hasUnassigned };
-  }, [students, getPcForStudent, teacherLookup]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effectivePcForStudent is redefined every render; it reads only from the deps listed here
+  }, [students, getPcForStudent, getLatestPcForStudent, teacherLookup]);
 
   const q = search.toLowerCase();
   const filtered = students.filter((s) => {
@@ -197,10 +218,11 @@ export function StudentsListView({
     const matchesPc =
       !pcFilter ||
       (pcFilter === "__unassigned__"
-        ? getPcForStudent(s.id) == null
-        : String(getPcForStudent(s.id) ?? "") === pcFilter);
+        ? effectivePcForStudent(s) == null
+        : String(effectivePcForStudent(s) ?? "") === pcFilter);
 
     return (
+      normalizeStudentStatus(s.status) === statusFilter &&
       matchesSearch &&
       matchesCountry &&
       matchesPackage &&
@@ -209,6 +231,12 @@ export function StudentsListView({
       matchesPc
     );
   });
+
+  const countByStatus = useMemo(() => {
+    const counts: Record<StudentStatus, number> = { active: 0, paused: 0, completed: 0 };
+    for (const s of students) counts[normalizeStudentStatus(s.status)]++;
+    return counts;
+  }, [students]);
 
   const activeFilterCount = [
     countryFilter,
@@ -226,10 +254,18 @@ export function StudentsListView({
     setPcFilter("");
   }
 
+  // Completing a student also closes their PC assignment, so both lists are
+  // refetched — the students cache was already invalidated by the RPC wrapper.
+  function handleStatusChanged() {
+    refetchStudents();
+    refetchAssignments();
+  }
+
   const columns: ColumnDef<Student>[] = [
     { header: "ID", accessor: (s) => <span className="font-mono text-xs font-semibold text-sky-500">{s.id}</span>, className: "whitespace-nowrap" },
     { header: "First name", accessor: (s) => s.first_name },
     { header: "Last name", accessor: (s) => s.last_name },
+    { header: "Status", accessor: (s) => <StudentStatusBadge status={s.status} />, className: "whitespace-nowrap" },
     { header: "Student Email", accessor: (s) => s.email ?? "—" },
     { header: "Send updates to", accessor: (s) => s.notification_email ?? "—" },
     {
@@ -250,9 +286,25 @@ export function StudentsListView({
     {
       header: "PC",
       accessor: (s) => {
-        const pcId = getPcForStudent(s.id);
-        return pcId ? (teacherLookup.get(pcId) ?? `#${pcId}`) : <span className="text-amber-600">Unassigned</span>;
+        const pcId = effectivePcForStudent(s);
+        if (!pcId) return <span className="text-amber-600">Unassigned</span>;
+        const name = teacherLookup.get(pcId) ?? `#${pcId}`;
+        // A completed student is no longer assigned — their coach is history,
+        // so it's shown muted rather than as a live assignment.
+        return normalizeStudentStatus(s.status) === "completed"
+          ? <span className="text-navy-300">{name}</span>
+          : name;
       },
+    },
+    {
+      header: "",
+      accessor: (s) =>
+        canEditStatus(s.id) ? (
+          <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+            <StudentStatusMenu student={s} onChanged={handleStatusChanged} />
+          </div>
+        ) : null,
+      className: "w-10",
     },
   ];
 
@@ -261,6 +313,23 @@ export function StudentsListView({
       <PageHeader title={title} description={description} action={headerAction} />
 
       {children}
+
+      <div className="flex gap-0 border-b border-navy-100 mb-5">
+        {STUDENT_STATUSES.map((status) => (
+          <button
+            key={status}
+            onClick={() => setStatusFilter(status)}
+            className={`px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              statusFilter === status
+                ? "border-sky-500 text-sky-600"
+                : "border-transparent text-navy-400 hover:text-navy-600 hover:border-navy-200"
+            }`}
+          >
+            {STUDENT_STATUS_LABEL[status]}
+            <span className="ml-2 text-xs text-navy-300 tabular-nums">{countByStatus[status]}</span>
+          </button>
+        ))}
+      </div>
 
       <Card className="p-4 mb-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -348,7 +417,7 @@ export function StudentsListView({
         )}
       </Card>
 
-      <p className="text-xs text-navy-400 mb-2">{filtered.length} of {students.length} students</p>
+      <p className="text-xs text-navy-400 mb-2">{filtered.length} of {countByStatus[statusFilter]} students</p>
 
       <DataTable
         columns={columns}
@@ -356,7 +425,10 @@ export function StudentsListView({
         getRowId={(s) => s.id}
         loading={loading}
         onRowClick={(s) => navigate(detailPath(s.id))}
-        emptyMessage={emptyMessage}
+        // The caller's empty message describes an empty roster ("no students
+        // assigned to you yet"), which isn't what an empty On pause/Completed
+        // tab means — fall back to the table's own wording there.
+        emptyMessage={statusFilter === "active" ? emptyMessage : undefined}
       />
     </>
   );

@@ -8,6 +8,9 @@ import { useStudents } from "../../hooks/useStudents";
 import { useTeachers } from "../../hooks/useTeachers";
 import { usePcAssignments } from "../../hooks/usePcAssignments";
 import { PcAssignmentReport } from "../../components/pc/PcAssignmentReport";
+import { StudentStatusBadge, StudentStatusMenu } from "../../components/students/StudentStatusControls";
+import { setStudentStatus } from "../../hooks/useStudents";
+import { normalizeStudentStatus } from "../../utils/studentStatus";
 import type { Student } from "../../types/database";
 
 function initials(first: string, last?: string | null) {
@@ -15,11 +18,12 @@ function initials(first: string, last?: string | null) {
 }
 
 export default function AdminPcAssignmentsPage() {
-  const { students, loading: loadingStudents } = useStudents();
+  const { students, loading: loadingStudents, refetch: refetchStudents } = useStudents();
   const { teachers, loading: loadingTeachers } = useTeachers();
   const {
     activeAssignments,
     loading: loadingAssignments,
+    refetch: refetchAssignments,
     assignStudent,
     unassignStudent,
   } = usePcAssignments();
@@ -53,6 +57,12 @@ export default function AdminPcAssignmentsPage() {
     setSaving(true);
     setAssignError(null);
     await assignStudent(selectedStudent.id, pcId);
+    // Re-assigning someone who was marked Completed restarts them: leaving the
+    // status alone would show a live assignment sitting under "Completed".
+    if (normalizeStudentStatus(selectedStudent.status) === "completed") {
+      await setStudentStatus(selectedStudent.id, "active");
+      await refetchStudents();
+    }
     setSaving(false);
     setAddingFor(null);
     setSelectedStudent(null);
@@ -61,6 +71,12 @@ export default function AdminPcAssignmentsPage() {
 
   async function handleUnassign(studentId: string) {
     await unassignStudent(studentId);
+  }
+
+  // Marking a student completed also closes their assignment, so this card's
+  // student list has to be refetched alongside the students themselves.
+  async function handleStatusChanged() {
+    await Promise.all([refetchStudents(), refetchAssignments()]);
   }
 
   function openAdd(pcId: string) {
@@ -100,8 +116,11 @@ export default function AdminPcAssignmentsPage() {
     );
   }
 
-  const unassignedCount = students.filter((s) => !assignedIds.has(s.id)).length;
-  const assignedCount = students.length - unassignedCount;
+  // A completed student is unassigned by definition, so counting them as
+  // "Unassigned" would read as a backlog of students still needing a coach.
+  const completedCount = students.filter((s) => normalizeStudentStatus(s.status) === "completed").length;
+  const assignedCount = students.filter((s) => assignedIds.has(s.id)).length;
+  const unassignedCount = students.length - assignedCount - completedCount;
 
   return (
     <AdminLayout>
@@ -111,7 +130,7 @@ export default function AdminPcAssignmentsPage() {
       />
 
       {/* Summary stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         <Card className="p-4">
           <p className="text-xs text-navy-400">Performance coaches</p>
           <p className="text-2xl font-bold text-navy-700 mt-1">{coaches.length}</p>
@@ -127,6 +146,10 @@ export default function AdminPcAssignmentsPage() {
         <Card className="p-4">
           <p className="text-xs text-navy-400">Unassigned</p>
           <p className={`text-2xl font-bold mt-1 ${unassignedCount > 0 ? "text-yellow-600" : "text-navy-700"}`}>{unassignedCount}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs text-navy-400">Completed</p>
+          <p className="text-2xl font-bold text-navy-700 mt-1">{completedCount}</p>
         </Card>
       </div>
 
@@ -199,13 +222,17 @@ export default function AdminPcAssignmentsPage() {
                             </div>
                             <span className="font-mono text-xs font-bold text-sky-500 shrink-0">{s.id}</span>
                             <span className="text-sm text-navy-700 truncate">{s.first_name} {s.last_name}</span>
+                            <StudentStatusBadge status={s.status} />
                           </div>
-                          <button
-                            onClick={() => handleUnassign(s.id)}
-                            className="text-xs text-red-400 hover:text-red-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2"
-                          >
-                            Remove
-                          </button>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            <button
+                              onClick={() => handleUnassign(s.id)}
+                              className="text-xs text-red-400 hover:text-red-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              Remove
+                            </button>
+                            <StudentStatusMenu student={s} onChanged={handleStatusChanged} />
+                          </div>
                         </div>
                       ))
                     )}

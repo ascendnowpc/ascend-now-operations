@@ -14,6 +14,8 @@ import { useSubjects } from "../../hooks/useSubjects";
 import { useCurricula } from "../../hooks/useCurricula";
 import { useTeachers, useAllTeacherSubjects } from "../../hooks/useTeachers";
 import { usePcAssignments } from "../../hooks/usePcAssignments";
+import { useMyTeacherProfile } from "../../hooks/useMyTeacherProfile";
+import { StudentStatusBadge, StudentStatusMenu } from "./StudentStatusControls";
 import { HomeworkResultsList } from "../homework/HomeworkResultsList";
 import { CoordinatorLogHistoryList } from "../coordinatorLogs/CoordinatorLogHistoryList";
 import type { PackageTopup, SessionLog, Student, StudentPackage } from "../../types/database";
@@ -154,7 +156,10 @@ export function StudentDetailView({ role, backPath, backLabel }: {
   const { curricula } = useCurricula();
   const { teachers } = useTeachers();
   const { subjectsByTeacher } = useAllTeacherSubjects();
-  const { getPcForStudent } = usePcAssignments();
+  const { getPcForStudent, refetch: refetchAssignments } = usePcAssignments();
+  // Only used to tell whether a coach viewing this page is THIS student's
+  // coach (an admin has no teachers row, so it stays null for them).
+  const { teacher: myTeacher } = useMyTeacherProfile();
 
   const tabParam = searchParams.get("tab");
   const initialTab: Tab =
@@ -659,6 +664,26 @@ export function StudentDetailView({ role, backPath, backLabel }: {
   }
 
   const fullName = `${student.first_name} ${student.last_name}`;
+
+  // Active / On pause / Completed. An admin can move any student; a coach only
+  // one currently assigned to them — completing a student unassigns them, so
+  // afterwards only an admin can put them back (set_student_status enforces
+  // exactly this server-side).
+  const canEditStatus = isAdmin || (myTeacher != null && getPcForStudent(student.id) === myTeacher.id);
+  const statusField = (
+    <div className="flex gap-2 items-center">
+      <dt className="text-navy-400 w-36 shrink-0">Status</dt>
+      <dd className="flex items-center gap-1">
+        <StudentStatusBadge status={student.status} />
+        {canEditStatus && (
+          <StudentStatusMenu
+            student={student}
+            onChanged={(updated) => { setStudent(updated); refetchAssignments(); }}
+          />
+        )}
+      </dd>
+    </div>
+  );
   // Stable non-null id for the deep-links built inside renderPoolCard (where
   // `student` is back to its nullable state type through the closure).
   const linkStudentId = student.id;
@@ -1031,6 +1056,7 @@ export function StudentDetailView({ role, backPath, backLabel }: {
                   <dt className="text-navy-400 w-36 shrink-0">Student added date</dt>
                   <dd className="text-navy-700 font-medium">{new Date(student.created_at).toLocaleDateString()}</dd>
                 </div>
+                {statusField}
               </dl>
             </div>
           ) : (
@@ -1068,6 +1094,7 @@ export function StudentDetailView({ role, backPath, backLabel }: {
                   })()}
                 </dd>
               </div>
+              {statusField}
               <div className="flex gap-2">
                 <dt className="text-navy-400 w-36 shrink-0">Report card</dt>
                 <dd className="text-navy-700 font-medium break-all">

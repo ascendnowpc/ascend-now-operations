@@ -2,6 +2,10 @@
 
 **Generated 2026-07-01 by direct introspection of the live Supabase project (`ascend-now`, ref `uqyuczvckqxgtilpzarh`, org `ascend-now`) via the Supabase MCP connection — every table, column, constraint, policy, function, and trigger below was read straight from the running Postgres instance, not from the migration files or any prior doc.**
 
+**Updated 2026-07-29 (students now have an Active / On pause / Completed status, and completing one unassigns them).** Applied via `supabase/migrations/20260805000000_student_status_categories.sql`, verified live. `students` gains **`status`** (NOT NULL, default `'active'`, CHECK ∈ `{active, paused, completed}`, indexed) and **`status_changed_at`**. Both a performance coach and an admin can move a student between the three categories; the admin and coach student lists (`/admin/students`, `/teacher/students`, plus the assigned-students lists on `/admin/pc-assignments` and `/admin/pcs/:id`) group by it.
+
+The status lives on `students`, **not** on `pc_student_assignments`, because marking a student `completed` also **closes their active assignment** — putting the state on the assignment would make it vanish at the exact moment it's set. Writes go through the new SECURITY DEFINER **`set_student_status()`** (see Functions) rather than a policy: RLS is row-level and cannot grant a coach a single column, and the completion path has to write `pc_student_assignments`, a table coaches deliberately cannot write. Consequence, by design: a coach cannot re-open a student they completed (they're no longer assigned to them) — an admin re-assigns from `/admin/pc-assignments`, which flips such a student back to `active`. **Verified live by impersonation:** an anonymous caller and an invalid status value were both rejected; an admin pause, a coach completion, and the resulting assignment closure all succeeded; and the coach was then correctly blocked from touching the student they had just completed (all inside a rolled-back transaction, leaving the live data untouched).
+
 **Updated 2026-07-29 (a teacher's last name is now compulsory).** Applied via `supabase/migrations/20260804001000_teachers_last_name_required.sql`, verified live. `teachers.last_name` is now **`NOT NULL`** plus a **`teachers_last_name_not_blank`** CHECK (`btrim(last_name) <> ''`) — NOT NULL alone would still have accepted an empty string, which defeats the point.
 
 Six teachers had no surname (`Anugya`, `Bharat`, `Ylenia`, `Magdaleina`, `Jesse`, `Sajjad`), created first-name-only by `20260728120000` / `20260804000200` because the client's session-log sheet only carried first names. Their real surnames are still unknown, and these names render on **student dashboards and invoice PDFs**, so rather than inventing plausible surnames — which would put a false name in front of students and paying customers — the backfill **repeats the first name** (`Anugya Anugya`), an explicit product decision. Replace them with the real surnames when known.
@@ -454,6 +458,10 @@ Unique per `(teacher_id, subject_id, curriculum_id)` when academic (curriculum s
 | graduation_year | smallint | YES | — (added 2026-07-06, verified live — see the first-login profile-completion entry above) |
 | birthday | date | YES | — (added 2026-07-06, verified live) |
 | school | text | YES | — (added 2026-07-06, verified live) |
+| status | text | NO | `'active'` — ∈ `{active, paused, completed}` (added 2026-07-29, verified live); the student's engagement category, see below |
+| status_changed_at | timestamptz | YES | — last time `status` was set (added 2026-07-29) |
+
+**Student status (added 2026-07-29, `20260805000000_student_status_categories.sql`):** every student sits in one of three categories — `active`, `paused` ("On pause"), or `completed`. **Completing a student also unassigns them from their Performance Coach**, so a `completed` student never has an active `pc_student_assignments` row; that is exactly why the status lives here and not on the assignment (it has to outlive the row that produced it). Both the admin and the coach's student lists group by it (see `README.md` §3). Non-`active` values only ever come from `set_student_status()` (see Functions) — a plain `UPDATE` on this column is admin-only like every other column, because RLS is row-level and cannot grant a coach one column. Indexed by `idx_students_status`.
 
 Unique index `students_user_id_key` on `user_id` **where `user_id IS NOT NULL`**. As of 2026-07-07, there is no `parent_id` column and no `parents` table — the former parent/guardian's name and phone are plain fields on this row (see above).
 
@@ -927,6 +935,7 @@ CHECK `subject_notes_has_content`: `note_text is not null or file_url is not nul
 | `session_logs` | `session_duration_hrs >= 0` and rounds cleanly to 0.25 (15-min increments) |
 | `session_logs` | `no_show_type` ∈ `{no_show_1, no_show_2, no_show_plus}` |
 | `subject_categories` | `type` ∈ `{academic, beyond_academic}` |
+| `students` | `status` ∈ `{active, paused, completed}` (`students_status_valid`, added 2026-07-29) |
 | `student_packages` | `total_hours_purchased >= 0` |
 | `student_packages` | `status` ∈ `{active, closed}` |
 | `package_topups` | `hours_added > 0` |
@@ -1000,6 +1009,11 @@ select exists (
 );
 ```
 Added 2026-07-06. Was used in the `pc_assign_unassigned_student_to_self` INSERT WITH CHECK to answer "does this student already have an active coach?" **from within a policy on `pc_student_assignments` itself** — being SECURITY DEFINER (and the table not being FORCE RLS) means it reads the table without re-applying that policy, which avoided the `infinite recursion detected in policy` error the previous inline subquery caused. As of 2026-07-18 that INSERT policy was dropped (PCs can no longer self-assign — see `pc_student_assignments`), so this helper is currently **unused** by any policy; it's kept in place (harmless, `EXECUTE` still granted to `authenticated`) in case coach self-assignment is ever reintroduced.
+
+### `set_student_status(p_student_id text, p_status text)` → `students`, SECURITY DEFINER, `SET search_path = 'public'` (added 2026-07-29)
+Moves a student between the three engagement categories (`active` / `paused` / `completed`) and, when completing, **closes their active `pc_student_assignments` row in the same call**. Raises `check_violation` on any other status value, and `insufficient_privilege` unless the caller is an admin **or** a performance coach with a currently-active assignment for that student.
+
+It exists as a function rather than an RLS policy for two reasons, both structural: (1) RLS is row-level, so there is no way to write a policy that lets a coach update `students.status` and nothing else; (2) completing must also write `pc_student_assignments`, where a coach has **no** write policy at all (assign/unassign stayed admin-only — see `20260706000000` / `20260801000300`), and doing both writes here keeps that rule intact and the pair atomic. A coach therefore cannot re-open a student they completed — completing unassigned them — and an admin re-assigns from `/admin/pc-assignments` (the UI flips such a student back to `active` on re-assignment). `EXECUTE` granted to `authenticated`. Verified live by impersonation: an anonymous caller and a coach-without-assignment were both rejected, an admin and the student's own coach both succeeded, and completing closed the assignment row.
 
 ### `prevent_non_admin_student_relink()` → trigger, SECURITY DEFINER, `SET search_path = 'public'` (added 2026-07-06; `parent_id` clause dropped 2026-07-07)
 ```sql

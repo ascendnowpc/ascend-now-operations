@@ -53,6 +53,15 @@ export function usePcAssignments() {
     return active?.pc_teacher_id ?? null;
   }
 
+  // The coach on the student's most recent assignment, active or not. Completing
+  // a student unassigns them (set_student_status closes the row), so this is the
+  // only way a completed student still shows up under the coach who saw them
+  // through — `assignments` is ordered assigned_at desc, so the first hit is the
+  // latest one, which matters for a student who changed coaches before finishing.
+  function getLatestPcForStudent(studentId: string): string | null {
+    return assignments.find((a) => a.student_id === studentId)?.pc_teacher_id ?? null;
+  }
+
   async function assignStudent(studentId: string, pcTeacherId: string) {
     // Close any existing active assignment first
     const existing = activeAssignments.find((a) => a.student_id === studentId);
@@ -90,6 +99,7 @@ export function usePcAssignments() {
     error,
     refetch,
     getPcForStudent,
+    getLatestPcForStudent,
     assignStudent,
     unassignStudent,
   };
