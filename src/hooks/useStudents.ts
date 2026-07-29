@@ -1,11 +1,34 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "../lib/supabaseClient";
-import type { Student } from "../types/database";
+import type { Student, StudentStatus } from "../types/database";
 import { getCached, setCached, invalidateCachePrefix } from "../lib/cache";
 import { idSeqNumber } from "../utils/entityId";
 
 function byIdNum(a: Student, b: Student) {
   return idSeqNumber(a.id) - idSeqNumber(b.id);
+}
+
+/**
+ * Moves a student between the Active / On pause / Completed categories.
+ *
+ * Goes through the `set_student_status` RPC rather than a plain UPDATE: a
+ * performance coach has no UPDATE policy on `students` (RLS is row-level, so
+ * "may edit only the status column" isn't expressible as a policy), and
+ * completing a student must also close their PC assignment — a table a coach
+ * cannot write at all. The function does the permission check and both writes
+ * atomically; see 20260805000000_student_status_categories.sql.
+ *
+ * Standalone (not part of the hook) so views that load a single student
+ * directly — e.g. StudentDetailView — can call it without pulling the whole
+ * students list.
+ */
+export async function setStudentStatus(studentId: string, status: StudentStatus) {
+  const { data, error } = await supabase.rpc("set_student_status", {
+    p_student_id: studentId,
+    p_status: status,
+  });
+  if (!error) invalidateCachePrefix("students:");
+  return { data: (data as Student | null) ?? null, error: error?.message ?? null };
 }
 
 // PostgREST caps any single request at this project's max-rows setting
@@ -74,6 +97,16 @@ export function useStudents() {
     return { data: data as Student | null, error: error?.message ?? null };
   }
 
+  // Same call as the standalone setStudentStatus above, but keeps this hook's
+  // in-memory list in step so a list view re-renders with the new category.
+  async function updateStudentStatus(id: string, status: StudentStatus) {
+    const { data, error } = await setStudentStatus(id, status);
+    if (!error && data) {
+      setStudents((prev) => prev.map((s) => (s.id === id ? data : s)));
+    }
+    return { data, error };
+  }
+
   function searchStudents(query: string): Student[] {
     if (!query.trim()) return [];
     const q = query.toLowerCase();
@@ -85,5 +118,5 @@ export function useStudents() {
     );
   }
 
-  return { students, loading, error, refetch, updateStudent, searchStudents };
+  return { students, loading, error, refetch, updateStudent, updateStudentStatus, searchStudents };
 }

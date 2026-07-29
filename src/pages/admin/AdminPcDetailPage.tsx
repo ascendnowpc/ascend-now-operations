@@ -12,6 +12,7 @@ import { PcProfileWithEducation } from "../../components/pc/PcProfileCard";
 import { PcProfileEditor } from "../../components/pc/PcProfileEditor";
 import { usePcAssignments } from "../../hooks/usePcAssignments";
 import { usePcProfile } from "../../hooks/usePcProfile";
+import { useStudents } from "../../hooks/useStudents";
 import { fetchTeacherById, deactivateTeacherById, useTeacherSubjects } from "../../hooks/useTeachers";
 import { useSubjects } from "../../hooks/useSubjects";
 import { useCurricula } from "../../hooks/useCurricula";
@@ -39,7 +40,8 @@ export default function AdminPcDetailPage() {
   const { id } = useParams<{ id: string }>();
   const pcId = id!;
   const navigate = useNavigate();
-  const { activeAssignments, loading: loadingAssignments } = usePcAssignments();
+  const { assignments, activeAssignments, loading: loadingAssignments } = usePcAssignments();
+  const { students } = useStudents();
   const [pc, setPc] = useState<Teacher | null>(null);
   const [loadingPc, setLoadingPc] = useState(true);
   const [tab, setTab] = useState<Tab>("details");
@@ -72,6 +74,16 @@ export default function AdminPcDetailPage() {
   const assignedIds = new Set(
     activeAssignments.filter((a) => a.pc_teacher_id === pcId).map((a) => a.student_id)
   );
+
+  // Completing a student unassigns them, so they'd otherwise vanish from the
+  // coach who saw them through. Keep them on this coach's list (matched on
+  // their latest assignment), same rule as the coach's own "My Students".
+  const studentIdsForPc = new Set(assignedIds);
+  for (const s of students) {
+    if (s.status !== "completed") continue;
+    const latest = assignments.find((a) => a.student_id === s.id);
+    if (latest?.pc_teacher_id === pcId) studentIdsForPc.add(s.id);
+  }
 
   if (loadingPc || loadingAssignments) {
     return (
@@ -213,7 +225,7 @@ export default function AdminPcDetailPage() {
         <StudentsListView
           title="Assigned students"
           description={`Students assigned to ${pcName} as their Performance Coach.`}
-          allowedIds={assignedIds}
+          allowedIds={studentIdsForPc}
           detailPath={(sid) => `/admin/students/${sid}`}
           emptyMessage="No students are assigned to this coach yet."
         />

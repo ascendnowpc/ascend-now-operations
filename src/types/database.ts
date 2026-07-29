@@ -17,6 +17,11 @@ export interface AppUser {
   updated_at: string;
 }
 
+// Where a student is in their engagement. A 'completed' student is always
+// unassigned from their Performance Coach — set_student_status() closes the
+// active pc_student_assignments row as part of the same call.
+export type StudentStatus = "active" | "paused" | "completed";
+
 export interface Student {
   id: string; // e.g. "BATO26-1" (3 letters of first name + 1 of last + enrollment year + sequence)
   first_name: string;
@@ -43,6 +48,8 @@ export interface Student {
   graduation_year: number | null;
   birthday: string | null; // ISO date, e.g. "2010-04-20"
   school: string | null;
+  status: StudentStatus;
+  status_changed_at: string | null;
   created_at: string;
 }
 
