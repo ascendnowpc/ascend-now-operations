@@ -74,7 +74,7 @@ function PersonalInfoHeader({
 
     const { error } = await updateMyProfile({
       first_name: firstName.trim(),
-      last_name: lastName.trim() || null,
+      last_name: lastName.trim(),
       phone_number: fullPhone,
       country: country.trim() || null,
     });
@@ -121,7 +121,7 @@ function PersonalInfoHeader({
           <div className="mt-3 flex flex-col gap-3 max-w-md">
             <div className="grid grid-cols-2 gap-3">
               <TextInput label="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
-              <TextInput label="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+              <TextInput label="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
             </div>
             <TextInput label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
             <PhoneInput

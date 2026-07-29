@@ -125,7 +125,7 @@ export default function AdminAdminsPage() {
           email,
           password,
           first_name: firstName,
-          last_name: lastName || null,
+          last_name: lastName,
           country: country || null,
           phone_number: phoneNumber.trim() ? `${dialCode} ${phoneNumber.trim()}` : null,
         },
@@ -204,6 +204,7 @@ export default function AdminAdminsPage() {
                 label="Last name"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
+                required
               />
             </div>
 

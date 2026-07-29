@@ -211,7 +211,7 @@ export interface Teacher {
   id: string; // e.g. "RANW26-3" — same mnemonic format as students/admins
   user_id: string | null;
   first_name: string;
-  last_name: string | null;
+  last_name: string; // required since 2026-07-29 (NOT NULL + non-blank CHECK)
   country: string | null;
   email: string | null;
   phone_number: string | null;

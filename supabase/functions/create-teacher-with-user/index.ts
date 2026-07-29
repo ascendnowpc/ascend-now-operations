@@ -78,8 +78,8 @@ serve(async (req) => {
       subjects = [],
     } = body;
 
-    if (!username || !email || !password || !first_name) {
-      return json({ error: "username, email, password, and first_name are required" }, 400);
+    if (!username || !email || !password || !first_name || !last_name) {
+      return json({ error: "username, email, password, first_name, and last_name are required" }, 400);
     }
 
     // 1. Create Supabase Auth user. The trg_create_user_profile trigger
@@ -105,7 +105,7 @@ serve(async (req) => {
       .insert({
         user_id: userId,
         first_name,
-        last_name: last_name || null,
+        last_name,
         country: country || null,
         email,
         phone_number: phone_number || null,

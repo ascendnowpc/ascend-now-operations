@@ -81,7 +81,7 @@ export default function TeacherProfilePage() {
 
     const { error } = await updateMyProfile({
       first_name: firstName.trim(),
-      last_name: lastName.trim() || null,
+      last_name: lastName.trim(),
       phone_number: fullPhone,
       country: country.trim() || null,
     });
@@ -142,7 +142,7 @@ export default function TeacherProfilePage() {
               <div className="flex flex-col gap-4">
                 <div className="grid grid-cols-2 gap-4">
                   <TextInput label="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
-                  <TextInput label="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                  <TextInput label="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
                 </div>
                 <TextInput label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
                 <PhoneInput

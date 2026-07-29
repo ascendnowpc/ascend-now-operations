@@ -244,7 +244,7 @@ export default function AdminTeacherFormPage() {
 
       const { error } = await updateTeacher(teacherId, {
         first_name: firstName,
-        last_name: lastName || null,
+        last_name: lastName,
         country: country || null,
         phone_number: fullPhone || null,
         is_performance_coach: isCoach,
@@ -318,6 +318,7 @@ export default function AdminTeacherFormPage() {
               label="Last name"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
+              required
             />
           </div>
 
