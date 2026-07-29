@@ -18,7 +18,11 @@ export const PROFILE_ICONS: { key: PcProfileIcon; label: string }[] = [
   { key: "heart", label: "Support" },
 ];
 
-export function ProfileIcon({ icon, className = "w-4.5 h-4.5" }: { icon: PcProfileIcon; className?: string }) {
+// Default size stays on Tailwind's real spacing scale — `w-4.5`/`h-4.5` is not
+// a step in it, so those class names compiled to nothing and every icon left on
+// the default (the editor's picker, the Education circles) rendered with no
+// dimensions at all, i.e. invisible.
+export function ProfileIcon({ icon, className = "w-5 h-5 shrink-0" }: { icon: PcProfileIcon; className?: string }) {
   switch (icon) {
     case "book":
       return (
