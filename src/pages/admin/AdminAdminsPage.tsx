@@ -12,7 +12,7 @@ import { invokeEdgeFunction, describeFunctionError } from "../../lib/edgeFunctio
 import { COUNTRY_OPTIONS, COUNTRY_DIAL_CODES } from "../../data/countries";
 import type { AppUser } from "../../types/database";
 
-type AdminRow = AppUser & { admin_phone: string | null; admin_country: string | null };
+type AdminRow = AppUser & { admin_id: string | null; admin_phone: string | null; admin_country: string | null };
 
 export default function AdminAdminsPage() {
   const { users, loading, refetch, updateUser } = useUsers();
@@ -20,15 +20,18 @@ export default function AdminAdminsPage() {
 
   // admins.phone_number/country live on the admins table, not users — merge
   // by user_id onto the users-table rows below.
-  const adminExtras: Record<string, { phone_number: string | null; country: string | null }> = {};
+  // (`id` too — the mnemonic admins.id, e.g. ARIS26-2; AppUser.id is the
+  // auth uuid, which is not the id shown anywhere else in the app.)
+  const adminExtras: Record<string, { id: string; phone_number: string | null; country: string | null }> = {};
   for (const a of adminRecords) {
-    adminExtras[a.user_id] = { phone_number: a.phone_number, country: a.country };
+    adminExtras[a.user_id] = { id: a.id, phone_number: a.phone_number, country: a.country };
   }
 
   const admins: AdminRow[] = users
     .filter((u) => u.role === "admin")
     .map((u) => ({
       ...u,
+      admin_id: adminExtras[u.id]?.id ?? null,
       admin_phone: adminExtras[u.id]?.phone_number ?? null,
       admin_country: adminExtras[u.id]?.country ?? null,
     }));
@@ -206,6 +209,7 @@ export default function AdminAdminsPage() {
   }
 
   const columns: ColumnDef<AdminRow>[] = [
+    { header: "ID", accessor: (u) => u.admin_id ?? "—", className: "whitespace-nowrap" },
     { header: "Username", accessor: (u) => u.username },
     { header: "Full name", accessor: (u) => u.full_name ?? "—" },
     { header: "Email", accessor: (u) => u.email },
