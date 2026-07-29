@@ -18,7 +18,7 @@ export interface AppUser {
 }
 
 export interface Student {
-  id: string; // e.g. "BATO26-0001" (3 letters of first name + 1 of last + enrollment year + sequence)
+  id: string; // e.g. "BATO26-1" (3 letters of first name + 1 of last + enrollment year + sequence)
   first_name: string;
   last_name: string;
   // The former parent/guardian's details, kept as plain fields on the student
@@ -392,7 +392,7 @@ export interface SessionLog {
   // field for that program type rather than using a separate column.
   coordinator_teacher_id: number | null;
   teacher_id: number | null;
-  student_id: string | null; // e.g. "BATO26-0001"
+  student_id: string | null; // e.g. "BATO26-1"
   student_first_name: string | null; // legacy free-text (pre-migration)
   student_last_name: string | null;  // legacy free-text (pre-migration)
   session_date: string; // ISO date string, e.g. "2026-03-31"
