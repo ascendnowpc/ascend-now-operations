@@ -60,7 +60,7 @@ export interface TeacherPeriodDetail {
 // no-show, and the full raw session list. Shared by the admin Teacher Hours
 // report and by the teacher/PC-facing "My Hours" page — both drill into the
 // exact same breakdown for a single teacher_id.
-export async function fetchTeacherPeriodDetail(teacherId: number, year: number, month: number): Promise<TeacherPeriodDetail> {
+export async function fetchTeacherPeriodDetail(teacherId: string, year: number, month: number): Promise<TeacherPeriodDetail> {
   const periodStart = `${year}-${String(month).padStart(2, "0")}-01`;
   const lastDay = new Date(year, month, 0).getDate();
   const periodEnd = `${year}-${String(month).padStart(2, "0")}-${lastDay}`;

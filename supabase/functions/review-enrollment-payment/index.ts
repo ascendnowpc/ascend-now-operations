@@ -626,7 +626,7 @@ ${paymentUrl ? `<div style="text-align:center;margin:24px 0 8px;"><a href="${pay
     // the specific line that shares its course_type_id. Kept best-effort: a
     // failure here never blocks the confirm the admin is waiting on, since
     // the packages themselves are already correctly created.
-    const resolvedRenewalRequests: { id: string; requested_by_teacher_id: number; courseTypeName: string; hours: number }[] = [];
+    const resolvedRenewalRequests: { id: string; requested_by_teacher_id: string; courseTypeName: string; hours: number }[] = [];
     try {
       const { data: matching } = await serviceClient
         .from("package_renewal_requests")

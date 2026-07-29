@@ -198,7 +198,7 @@ export function StudentDetailView({ role, backPath, backLabel }: {
   // rather than waiting for the first ambiguous session.
   const [showAddResolution, setShowAddResolution] = useState(false);
   const [newResolutionPoolId, setNewResolutionPoolId] = useState<number | "">("");
-  const [newResolutionTeacherId, setNewResolutionTeacherId] = useState<number | "">("");
+  const [newResolutionTeacherId, setNewResolutionTeacherId] = useState<string>("");
   const [newResolutionSubjectId, setNewResolutionSubjectId] = useState<number | "">("");
   const [addResolutionSaving, setAddResolutionSaving] = useState(false);
   const [addResolutionError, setAddResolutionError] = useState<string | null>(null);
@@ -437,7 +437,7 @@ export function StudentDetailView({ role, backPath, backLabel }: {
     const { error } = await createPoolResolution({
       studentId: pool.student_id,
       courseTypeId: pool.course_type_id,
-      teacherId: Number(newResolutionTeacherId),
+      teacherId: newResolutionTeacherId,
       subjectId: newResolutionSubjectId === "" ? null : Number(newResolutionSubjectId),
       studentPackageId: pool.id,
       resolvedByUserId: profile.id,
@@ -1301,7 +1301,7 @@ export function StudentDetailView({ role, backPath, backLabel }: {
                         <label className="block text-[11px] text-navy-500 mb-1">Teacher</label>
                         <select
                           value={newResolutionTeacherId}
-                          onChange={(e) => { setNewResolutionTeacherId(e.target.value ? Number(e.target.value) : ""); setNewResolutionSubjectId(""); }}
+                          onChange={(e) => { setNewResolutionTeacherId(e.target.value); setNewResolutionSubjectId(""); }}
                           className="w-full rounded-lg border border-navy-100 px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-sky-300"
                         >
                           <option value="" disabled>Select a teacher…</option>

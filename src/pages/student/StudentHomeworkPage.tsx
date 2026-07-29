@@ -28,7 +28,7 @@ function ItemRow({
   item: StudentHomeworkItem;
   number: number;
   subjectName: (id: number | null) => string | null;
-  teacherName: (id: number | null) => string | null;
+  teacherName: (id: string | null) => string | null;
 }) {
   const { paper, grade, stage } = item;
   const totalQ = paper.questions_json?.total_questions ?? 0;
@@ -82,13 +82,13 @@ export default function StudentHomeworkPage() {
 
   const teacherName = useMemo(() => {
     const m = new Map(teachers.map((t) => [t.id, `${t.first_name} ${t.last_name ?? ""}`.trim()]));
-    return (id: number | null) => (id != null ? (m.get(id) ?? null) : null);
+    return (id: string | null) => (id != null ? (m.get(id) ?? null) : null);
   }, [teachers]);
 
   // Only offer teachers/subjects that actually appear on this student's papers,
   // so the dropdowns stay short and every option returns at least one result.
   const teacherOptions = useMemo(() => {
-    const ids = [...new Set(items.map((i) => i.paper.created_by_teacher_id).filter((id): id is number => id != null))];
+    const ids = [...new Set(items.map((i) => i.paper.created_by_teacher_id).filter((id): id is string => id != null))];
     return ids
       .map((id) => ({ value: String(id), label: teacherName(id) ?? `Teacher ${id}` }))
       .sort((a, b) => a.label.localeCompare(b.label));

@@ -71,7 +71,7 @@ export default function AdminTeacherFormPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const teacherId = id ? Number(id) : undefined;
+  const teacherId = id;
   const { subjects, addSubject, removeSubject } = useTeacherSubjects(teacherId);
   const { subjects: allSubjects } = useSubjects();
   const { curricula } = useCurricula();
@@ -139,7 +139,7 @@ export default function AdminTeacherFormPage() {
 
   useEffect(() => {
     if (!isEditing || !id) return;
-    fetchTeacherById(Number(id)).then(({ data }) => {
+    fetchTeacherById(id).then(({ data }) => {
       if (data) {
         setFirstName(data.first_name);
         setLastName(data.last_name ?? "");
@@ -220,7 +220,7 @@ export default function AdminTeacherFormPage() {
       : "";
 
     if (isEditing) {
-      const teacherId = Number(id);
+      const teacherId = id!;
       const trimmedEmail = email.trim() || null;
       const emailChanged = (trimmedEmail ?? "").toLowerCase() !== originalEmail.toLowerCase();
       let syncedViaAuth = false;
@@ -244,7 +244,7 @@ export default function AdminTeacherFormPage() {
 
       const { error } = await updateTeacher(teacherId, {
         first_name: firstName,
-        last_name: lastName || null,
+        last_name: lastName,
         country: country || null,
         phone_number: fullPhone || null,
         is_performance_coach: isCoach,
@@ -257,7 +257,7 @@ export default function AdminTeacherFormPage() {
     }
 
     // Create mode
-    const { data, error: invokeErr } = await invokeEdgeFunction<{ data: { id: number } }>(
+    const { data, error: invokeErr } = await invokeEdgeFunction<{ data: { id: string } }>(
       "create-teacher-with-user",
       {
         body: {
@@ -318,6 +318,7 @@ export default function AdminTeacherFormPage() {
               label="Last name"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
+              required
             />
           </div>
 

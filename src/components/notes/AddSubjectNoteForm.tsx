@@ -17,7 +17,7 @@ export function AddSubjectNoteForm({
   onAdded,
 }: {
   studentId: string;
-  teacherId: number;
+  teacherId: string;
   subjectId: number;
   curriculumId: number | null;
   onAdded?: () => void;

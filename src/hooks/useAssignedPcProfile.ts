@@ -35,7 +35,7 @@ export function useAssignedPcProfile(studentId: string | null | undefined) {
         .limit(1)
         .maybeSingle();
 
-      const pcTeacherId = (assignment as { pc_teacher_id: number } | null)?.pc_teacher_id ?? null;
+      const pcTeacherId = (assignment as { pc_teacher_id: string } | null)?.pc_teacher_id ?? null;
       if (!pcTeacherId) {
         if (!cancelled) { setData(null); setLoading(false); }
         return;

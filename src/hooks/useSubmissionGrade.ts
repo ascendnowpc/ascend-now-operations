@@ -54,7 +54,7 @@ export function useSubmissionGrade(paperId: number | undefined) {
   async function overrideMark(
     questionId: string,
     awarded: number | null,
-    teacherId: number,
+    teacherId: string,
   ): Promise<{ error: string | null }> {
     if (!grade) return { error: "No grade loaded." };
     const q = grade.per_question_json[questionId];
@@ -121,7 +121,7 @@ export function useSubmissionGrade(paperId: number | undefined) {
   async function setWholePaperMark(
     awarded: number,
     max: number,
-    teacherId: number,
+    teacherId: string,
   ): Promise<{ error: string | null }> {
     if (!grade?.whole_paper_grade) return { error: "No whole-paper answer to grade." };
     const wholePaperGrade: WholePaperGrade = {
@@ -178,7 +178,7 @@ export function useSubmissionGrade(paperId: number | undefined) {
   // student can't SELECT the row at all under RLS until published_at is set
   // here. Clicking publish also counts as the teacher's review, so it stamps
   // teacher_reviewed_* too if that hasn't happened via an override already.
-  async function publishGrade(teacherId: number): Promise<{ error: string | null }> {
+  async function publishGrade(teacherId: string): Promise<{ error: string | null }> {
     if (!grade) return { error: "No grade loaded." };
     const { data, error } = await supabase
       .from("grades")

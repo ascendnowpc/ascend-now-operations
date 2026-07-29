@@ -184,7 +184,7 @@ export function SessionLogFormView({
   const [teacherId, setTeacherId] = useState("");
   const effectiveTeacherId = role === "admin" ? teacherId : (currentTeacher ? String(currentTeacher.id) : "");
   const [coordinatorId, setCoordinatorId] = useState("");
-  const { subjects: myTeacherSubjects } = useTeacherSubjects(effectiveTeacherId ? Number(effectiveTeacherId) : undefined);
+  const { subjects: myTeacherSubjects } = useTeacherSubjects(effectiveTeacherId || undefined);
   const [noShowType, setNoShowType] = useState<NoShowType | null>(null);
   const [showNoShowMenu, setShowNoShowMenu] = useState(false);
   const noShowRef = useRef<HTMLDivElement>(null);
@@ -643,7 +643,7 @@ export function SessionLogFormView({
         };
 
     const payloadTeacherId = role === "admin"
-      ? (teacherId ? Number(teacherId) : null)
+      ? (teacherId || null)
       : (currentTeacher ? currentTeacher.id : null);
 
     const payload = noShowType
@@ -753,7 +753,7 @@ export function SessionLogFormView({
       }
       await supabase.from("subject_notes").insert({
         student_id: selectedStudent.id,
-        teacher_id: Number(effectiveTeacherId),
+        teacher_id: effectiveTeacherId,
         subject_id: selectedTS.subject_id,
         curriculum_id: selectedTS.curriculum_id,
         title: noteName.trim() || (effectiveTopic ? effectiveTopic.trim() : "") || "Note",

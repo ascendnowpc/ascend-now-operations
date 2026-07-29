@@ -14,12 +14,12 @@ export type MonthlyReportWithStats = MonthlyReport & {
 };
 
 type TeacherStatInput = {
-  teacher_id: number | null; teacher_name: string; sessions: number; hours: number;
+  teacher_id: string | null; teacher_name: string; sessions: number; hours: number;
   no_show_payable_count: number; no_show_payout_amount: number;
 };
 type StudentStatInput = { student_id: string | null; student_name: string; sessions: number; hours: number };
 export type TeacherSubjectStatInput = {
-  teacher_id: number | null; teacher_name: string;
+  teacher_id: string | null; teacher_name: string;
   subject_id: number | null; subject_name: string; subject_level: string | null;
   curriculum_id: number | null; curriculum_name: string | null;
   program_type_name: string | null;

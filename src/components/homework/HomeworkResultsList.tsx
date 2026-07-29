@@ -32,7 +32,7 @@ export function HomeworkResultsList({
   studentId: string | undefined;
   subjectName: (id: number | null) => string | null;
   /** Resolves the assigning teacher's name — when given, shown as "By …". */
-  teacherName?: (id: number | null) => string | null;
+  teacherName?: (id: string | null) => string | null;
   /** Wrap each card in a Link to `${linkBase}/:paperId`. */
   linkable?: boolean;
   /** Base path for the paper link — admin views open under /admin/homework. */

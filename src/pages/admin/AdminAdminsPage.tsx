@@ -3,16 +3,48 @@ import { AdminLayout } from "./AdminLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { DataTable, type ColumnDef } from "../../components/ui/DataTable";
 import { Button } from "../../components/ui/Button";
-import { TextInput } from "../../components/ui/Input";
+import { TextInput, SelectInput, PhoneInput } from "../../components/ui/Input";
 import { Card } from "../../components/ui/Card";
 import { IconPlus } from "../../components/ui/icons";
 import { useUsers } from "../../hooks/useUsers";
 import { invokeEdgeFunction, describeFunctionError } from "../../lib/edgeFunctions";
+import { supabase } from "../../lib/supabaseClient";
+import { COUNTRY_OPTIONS, COUNTRY_DIAL_CODES } from "../../data/countries";
 import type { AppUser } from "../../types/database";
+
+type AdminRow = AppUser & { admin_phone: string | null; admin_country: string | null };
 
 export default function AdminAdminsPage() {
   const { users, loading, refetch } = useUsers();
-  const admins = users.filter((u) => u.role === "admin");
+
+  // admins.phone_number/country live on the admins table, not users — fetch
+  // and key by user_id so they can be merged onto the users-table rows below.
+  const [adminExtras, setAdminExtras] = useState<
+    Record<string, { phone_number: string | null; country: string | null }>
+  >({});
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from("admins").select("user_id, phone_number, country");
+      if (cancelled || !data) return;
+      const map: Record<string, { phone_number: string | null; country: string | null }> = {};
+      for (const row of data as { user_id: string; phone_number: string | null; country: string | null }[]) {
+        map[row.user_id] = { phone_number: row.phone_number, country: row.country };
+      }
+      setAdminExtras(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [users]);
+
+  const admins: AdminRow[] = users
+    .filter((u) => u.role === "admin")
+    .map((u) => ({
+      ...u,
+      admin_phone: adminExtras[u.id]?.phone_number ?? null,
+      admin_country: adminExtras[u.id]?.country ?? null,
+    }));
 
   // Filters
   const [search, setSearch] = useState("");
@@ -39,6 +71,9 @@ export default function AdminAdminsPage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [country, setCountry] = useState("");
+  const [dialCode, setDialCode] = useState("+1");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
@@ -66,6 +101,9 @@ export default function AdminAdminsPage() {
     setFirstName("");
     setLastName("");
     setEmail("");
+    setCountry("");
+    setDialCode("+1");
+    setPhoneNumber("");
     setUsername("");
     setPassword("");
     usernameManualRef.current = false;
@@ -87,7 +125,9 @@ export default function AdminAdminsPage() {
           email,
           password,
           first_name: firstName,
-          last_name: lastName || null,
+          last_name: lastName,
+          country: country || null,
+          phone_number: phoneNumber.trim() ? `${dialCode} ${phoneNumber.trim()}` : null,
         },
       }
     );
@@ -105,10 +145,12 @@ export default function AdminAdminsPage() {
     refetch();
   }
 
-  const columns: ColumnDef<AppUser>[] = [
+  const columns: ColumnDef<AdminRow>[] = [
     { header: "Username", accessor: (u) => u.username },
     { header: "Full name", accessor: (u) => u.full_name ?? "—" },
     { header: "Email", accessor: (u) => u.email },
+    { header: "Country", accessor: (u) => u.admin_country ?? "—" },
+    { header: "Phone", accessor: (u) => u.admin_phone ?? "—", className: "whitespace-nowrap" },
     {
       header: "Status",
       accessor: (u) => (
@@ -162,16 +204,39 @@ export default function AdminAdminsPage() {
                 label="Last name"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
+                required
               />
             </div>
 
-            <TextInput
-              label="Email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
+            <SelectInput
+              label="Country"
+              placeholder="Select a country"
+              value={country}
+              onChange={(e) => {
+                const next = e.target.value;
+                setCountry(next);
+                const dial = COUNTRY_DIAL_CODES[next];
+                if (dial) setDialCode(dial);
+              }}
+              options={COUNTRY_OPTIONS}
             />
+
+            <div className="grid grid-cols-2 gap-4">
+              <TextInput
+                label="Email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+              <PhoneInput
+                label="Phone number"
+                dialCode={dialCode}
+                onDialCodeChange={setDialCode}
+                phoneNumber={phoneNumber}
+                onPhoneNumberChange={setPhoneNumber}
+              />
+            </div>
 
             <hr className="border-navy-50 my-1" />
             <p className="text-sm font-semibold text-navy-700">

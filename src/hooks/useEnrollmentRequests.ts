@@ -112,7 +112,7 @@ export function useEnrollmentRequests() {
     birthday?: string | null;
     school?: string | null;
     note?: string | null;
-    pc_teacher_id?: number | null;
+    pc_teacher_id?: string | null;
     created_by_user_id: string;
     packages: NewPackageInput[];
   }) => {

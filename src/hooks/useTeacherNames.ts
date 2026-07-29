@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
-export function useTeacherNames(ids: number[]) {
-  const [names, setNames] = useState<Map<number, string>>(new Map());
+export function useTeacherNames(ids: string[]) {
+  const [names, setNames] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (ids.length === 0) { setNames(new Map()); return; }
@@ -12,8 +12,8 @@ export function useTeacherNames(ids: number[]) {
       .in("id", ids)
       .then(({ data }) => {
         if (!data) return;
-        const map = new Map<number, string>();
-        for (const t of data as { id: number; first_name: string; last_name: string | null }[]) {
+        const map = new Map<string, string>();
+        for (const t of data as { id: string; first_name: string; last_name: string | null }[]) {
           map.set(t.id, `${t.first_name} ${t.last_name ?? ""}`.trim());
         }
         setNames(map);

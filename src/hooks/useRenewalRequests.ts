@@ -47,7 +47,7 @@ export function useRenewalRequests() {
     requested_hours?: number | null;
     package_size_label?: string | null;
     note?: string | null;
-    requested_by_teacher_id: number;
+    requested_by_teacher_id: string;
   }) => {
     setLoading(true);
     const { data, error } = await supabase

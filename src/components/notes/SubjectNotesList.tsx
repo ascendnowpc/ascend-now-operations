@@ -16,8 +16,8 @@ export function SubjectNotesList({
   onDelete,
 }: {
   notes: SubjectNote[];
-  teacherLookup: Map<number, string>;
-  deletableTeacherId?: number;
+  teacherLookup: Map<string, string>;
+  deletableTeacherId?: string;
   onDelete?: (note: SubjectNote) => void | Promise<void>;
 }) {
   if (notes.length === 0) {

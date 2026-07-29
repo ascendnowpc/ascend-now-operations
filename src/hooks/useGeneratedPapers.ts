@@ -24,7 +24,7 @@ const GENERATION_TIMEOUT_MS = 240_000;
 
 export interface CreatePaperInput {
   studentId: string;
-  createdByTeacherId: number;
+  createdByTeacherId: string;
   subjectId?: number | null;
   curriculumId?: number | null;
   contentSourceType: ContentSourceType;
@@ -62,7 +62,7 @@ export const MAX_PARSE_FILES = 20;
 // Papers created by one teacher, newest first. RLS also allows admins to see
 // everything, but this hook is the teacher-facing list so it scopes to the
 // caller's own teacher id.
-export function useGeneratedPapers(teacherId: number | undefined) {
+export function useGeneratedPapers(teacherId: string | undefined) {
   const [papers, setPapers] = useState<GeneratedPaper[]>([]);
   // Per-paper submission + grade, so the list can tell "needs the teacher's
   // review" apart from "graded" (a paper's status flips to 'graded' the instant
@@ -201,7 +201,7 @@ export function useGeneratedPapers(teacherId: number | undefined) {
   // navigate to its review page immediately.
   async function parseExistingPaper(
     studentId: string,
-    teacherIdArg: number,
+    teacherIdArg: string,
     files: File[],
     // The subject/curriculum the teacher says this paper is for — used to name
     // the paper (a parsed paper has no session log to inherit it from).
@@ -355,7 +355,7 @@ export function useGeneratedPapers(teacherId: number | undefined) {
       "id" | "subject_id" | "curriculum_id" | "blocks" | "difficulty" | "questions_json"
     >,
     targetStudentId: string,
-    createdByTeacherId: number,
+    createdByTeacherId: string,
     // The subject/curriculum the reused paper is being assigned to. The teacher
     // picks these from the subject hierarchy at reuse time (the source paper's
     // own subject may not fit the new student), and they name the cloned paper.

@@ -48,12 +48,12 @@ export function usePcAssignments() {
   const assignedStudentIds = new Set(activeAssignments.map((a) => a.student_id));
 
   // Returns the active pc_teacher_id for a given student, or null if unassigned
-  function getPcForStudent(studentId: string): number | null {
+  function getPcForStudent(studentId: string): string | null {
     const active = activeAssignments.find((a) => a.student_id === studentId);
     return active?.pc_teacher_id ?? null;
   }
 
-  async function assignStudent(studentId: string, pcTeacherId: number) {
+  async function assignStudent(studentId: string, pcTeacherId: string) {
     // Close any existing active assignment first
     const existing = activeAssignments.find((a) => a.student_id === studentId);
     if (existing) {

@@ -74,7 +74,7 @@ export function useSubjects(category?: string) {
     refetch();
   }, [refetch]);
 
-  async function createSubject(input: { name: string; category: string; category_id?: number; curriculum_group_id?: number; curriculum_id?: number; board?: string; subject_code?: string; level?: string; added_by_teacher_id?: number }) {
+  async function createSubject(input: { name: string; category: string; category_id?: number; curriculum_group_id?: number; curriculum_id?: number; board?: string; subject_code?: string; level?: string; added_by_teacher_id?: string }) {
     const { data, error } = await supabase
       .from("subjects")
       .insert(input)
@@ -161,7 +161,7 @@ export function useAllSubjects() {
     refetch();
   }, [refetch]);
 
-  async function createSubject(input: { name: string; category: string; category_id?: number; curriculum_group_id?: number; curriculum_id?: number; board?: string; subject_code?: string; level?: string; added_by_teacher_id?: number }) {
+  async function createSubject(input: { name: string; category: string; category_id?: number; curriculum_group_id?: number; curriculum_id?: number; board?: string; subject_code?: string; level?: string; added_by_teacher_id?: string }) {
     const { data, error } = await supabase
       .from("subjects")
       .insert(input)

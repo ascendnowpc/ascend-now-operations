@@ -378,7 +378,7 @@ function SubjectSessions({
   notes,
 }: {
   node: SubjectNode | null;
-  teacherLookup: Map<number, string>;
+  teacherLookup: Map<string, string>;
   programTypes: ProgramType[];
   notes: SubjectNote[];
 }) {
@@ -392,7 +392,7 @@ function SubjectSessions({
 
   // Section the sessions by teacher — one table per teacher, most recent first
   // within each, and the teachers ordered by how many sessions they've logged.
-  const byTeacher = new Map<number | "none", SessionLog[]>();
+  const byTeacher = new Map<string | "none", SessionLog[]>();
   for (const s of node.sessions) {
     const k = s.teacher_id ?? "none";
     const arr = byTeacher.get(k) ?? [];

@@ -6,8 +6,8 @@ import { getCached, setCached, invalidateCachePrefix } from "../lib/cache";
 export interface SessionLogFilters {
   year?: string;
   month?: string;
-  teacherId?: number;
-  coordinatorId?: number;
+  teacherId?: string;
+  coordinatorId?: string;
   studentFirstName?: string;
   studentLastName?: string;
   subjectId?: number;
@@ -22,7 +22,7 @@ export interface SessionLogFilters {
   dateTo?: string;
 }
 
-function filtersKey(filters: SessionLogFilters, scopeToTeacherId?: number, scopeToStudentId?: string, scopeToStudentIdsKey?: string) {
+function filtersKey(filters: SessionLogFilters, scopeToTeacherId?: string, scopeToStudentId?: string, scopeToStudentIdsKey?: string) {
   return `sessionLogs:${scopeToTeacherId ?? ""}:${scopeToStudentId ?? ""}:${scopeToStudentIdsKey ?? ""}:${JSON.stringify(filters)}`;
 }
 
@@ -32,7 +32,7 @@ function filtersKey(filters: SessionLogFilters, scopeToTeacherId?: number, scope
 // exactly one student (a student's own portal view). Joined to a stable
 // string for the effect/cache-key dependency since a fresh array reference
 // would otherwise be seen as "changed" on every render.
-export function useSessionLogs(filters: SessionLogFilters = {}, scopeToTeacherId?: number, scopeToStudentId?: string, scopeToStudentIds?: string[]) {
+export function useSessionLogs(filters: SessionLogFilters = {}, scopeToTeacherId?: string, scopeToStudentId?: string, scopeToStudentIds?: string[]) {
   const [logs, setLogs] = useState<SessionLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -929,7 +929,7 @@ export function buildFullMonthlyReportPdf(opts: {
 // ── Teacher invoice (hours report) ───────────────────────────────────────────
 
 export type TeacherInvoiceInfo = {
-  id: number;
+  id: string;
   name: string;
   email: string | null;
   phone: string | null;

@@ -10,6 +10,7 @@ import { IconDownload, IconPlus } from "../../components/ui/icons";
 import { useTeachers, useInactiveTeachers } from "../../hooks/useTeachers";
 import { useUsers } from "../../hooks/useUsers";
 import type { Teacher } from "../../types/database";
+import { idSeqNumber } from "../../utils/entityId";
 
 function exportCsv(pcs: Teacher[], usernameLookup: Map<string, string>) {
   const headers = ["ID", "First Name", "Last Name", "Username", "Email", "Phone", "Country", "Active"];
@@ -43,7 +44,7 @@ export default function AdminPcsPage() {
   const { users } = useUsers();
   const navigate = useNavigate();
 
-  const byId = (a: Teacher, b: Teacher) => a.id - b.id;
+  const byId = (a: Teacher, b: Teacher) => idSeqNumber(a.id) - idSeqNumber(b.id);
   const activePcs = rawTeachers.filter((t) => t.is_active && t.is_performance_coach).sort(byId);
   const inactivePcs = inactiveRaw.filter((t) => t.is_performance_coach).sort(byId);
 

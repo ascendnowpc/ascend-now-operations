@@ -38,7 +38,7 @@ export default function AdminTeacherViewPage() {
 
   useEffect(() => {
     if (!id) return;
-    fetchTeacherById(Number(id)).then(({ data, error }) => {
+    fetchTeacherById(id).then(({ data, error }) => {
       if (error || !data) {
         setNotFound(true);
       } else {

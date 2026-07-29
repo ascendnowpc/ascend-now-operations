@@ -79,7 +79,7 @@ export type PcProfileDraft = Pick<
  * backs both the coach's own editor (`/teacher/pc-profile`) and the admin/
  * teacher directory views. Saving only succeeds on the caller's own row.
  */
-export function usePcProfile(teacherId: number | null | undefined) {
+export function usePcProfile(teacherId: string | null | undefined) {
   const [profile, setProfile] = useState<PcProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -43,7 +43,7 @@ export function useTeachers() {
     return { data: data as Teacher | null, error: error?.message ?? null };
   }
 
-  async function updateTeacher(id: number, input: Partial<Teacher>) {
+  async function updateTeacher(id: string, input: Partial<Teacher>) {
     const { data, error } = await supabase.from("teachers").update(input).eq("id", id).select("*").single();
     if (!error && data) {
       invalidateCache(TEACHERS_KEY);
@@ -77,7 +77,7 @@ export function useInactiveTeachers() {
 
   useEffect(() => { refetch(); }, [refetch]);
 
-  async function activateTeacher(id: number) {
+  async function activateTeacher(id: string) {
     const { data: t, error: fetchErr } = await supabase.from("teachers").select("user_id").eq("id", id).single();
     if (fetchErr) return { error: fetchErr.message };
     const { error } = await supabase.from("teachers").update({ is_active: true }).eq("id", id);
@@ -94,7 +94,7 @@ export function useInactiveTeachers() {
   return { teachers, loading, error, refetch, activateTeacher };
 }
 
-export async function fetchTeacherById(id: number) {
+export async function fetchTeacherById(id: string) {
   const { data, error } = await supabase.from("teachers").select("*").eq("id", id).single();
   return { data: data as Teacher | null, error: error?.message ?? null };
 }
@@ -121,7 +121,7 @@ export async function deactivateTeacherById(teacher: Teacher) {
 // ---------------------------------------------------------------------------
 
 export function useAllTeacherSubjects() {
-  const [subjectsByTeacher, setSubjectsByTeacher] = useState<Map<number, TeacherSubject[]>>(
+  const [subjectsByTeacher, setSubjectsByTeacher] = useState<Map<string, TeacherSubject[]>>(
     () => {
       const cached = getCached<TeacherSubject[]>(SUBJECTS_KEY);
       return cached ? groupByTeacher(cached) : new Map();
@@ -149,8 +149,8 @@ export function useAllTeacherSubjects() {
   return { subjectsByTeacher, loading, refetch };
 }
 
-function groupByTeacher(rows: TeacherSubject[]): Map<number, TeacherSubject[]> {
-  const map = new Map<number, TeacherSubject[]>();
+function groupByTeacher(rows: TeacherSubject[]): Map<string, TeacherSubject[]> {
+  const map = new Map<string, TeacherSubject[]>();
   for (const row of rows) {
     const existing = map.get(row.teacher_id) ?? [];
     map.set(row.teacher_id, [...existing, row]);
@@ -161,7 +161,7 @@ function groupByTeacher(rows: TeacherSubject[]): Map<number, TeacherSubject[]> {
 // Merge plain Teacher[] with the subjects map into TeacherWithSubjects[]
 export function mergeWithSubjects(
   teachers: Teacher[],
-  subjectsByTeacher: Map<number, TeacherSubject[]>
+  subjectsByTeacher: Map<string, TeacherSubject[]>
 ): TeacherWithSubjects[] {
   return teachers.map((t) => ({
     ...t,
@@ -177,7 +177,7 @@ export function mergeWithSubjects(
 // useTeacherSubjects — subjects for a single teacher (used in editors)
 // ---------------------------------------------------------------------------
 
-export function useTeacherSubjects(teacherId?: number) {
+export function useTeacherSubjects(teacherId?: string) {
   const [subjects, setSubjects] = useState<TeacherSubject[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

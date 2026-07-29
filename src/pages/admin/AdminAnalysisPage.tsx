@@ -260,14 +260,14 @@ export default function AdminAnalysisPage() {
             placeholder="All tutors"
             options={tutorOptions}
             selected={filters.teacherIds.map(String)}
-            onChange={(vals) => setFilters((f) => ({ ...f, teacherIds: vals.map(Number) }))}
+            onChange={(vals) => setFilters((f) => ({ ...f, teacherIds: vals }))}
           />
           <MultiSelect
             label="Performance Coach"
             placeholder="All PCs"
             options={pcOptions}
             selected={filters.coordinatorIds.map(String)}
-            onChange={(vals) => setFilters((f) => ({ ...f, coordinatorIds: vals.map(Number) }))}
+            onChange={(vals) => setFilters((f) => ({ ...f, coordinatorIds: vals }))}
           />
           <MultiSelect
             label="Countries"

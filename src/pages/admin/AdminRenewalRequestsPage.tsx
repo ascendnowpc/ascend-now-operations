@@ -49,7 +49,7 @@ export default function AdminRenewalRequestsPage() {
     return s ? `${s.id} — ${s.first_name} ${s.last_name}` : id;
   }
 
-  function pcName(id: number) {
+  function pcName(id: string) {
     const t = teachers.find((t) => t.id === id);
     return t ? `${t.first_name} ${t.last_name ?? ""}`.trim() : `Teacher ${id}`;
   }
