@@ -67,7 +67,7 @@ export function CoordinatorLogsListView({
   const { logs, loading } = useCoordinatorLogs(
     {
       studentId: studentFilterId ?? undefined,
-      teacherId: teacherFilterId ? Number(teacherFilterId) : undefined,
+      teacherId: teacherFilterId ? teacherFilterId : undefined,
       courseTypeId: courseTypeFilterId ? Number(courseTypeFilterId) : undefined,
       primaryGoalOptionId: primaryGoalFilterId ? Number(primaryGoalFilterId) : undefined,
       progressStatusOptionId: progressStatusFilterId ? Number(progressStatusFilterId) : undefined,

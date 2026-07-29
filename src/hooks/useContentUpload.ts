@@ -128,7 +128,7 @@ export function useContentUpload() {
   // id at generate time without re-uploading.
   async function uploadAndIndex(
     studentId: string,
-    teacherId: number,
+    teacherId: string,
     file: File,
   ): Promise<{ upload: ContentUpload | null; error: string | null }> {
     setUploading(true);
@@ -203,7 +203,7 @@ export function useContentUpload() {
 // object) — the teacher-only scoping here is a deliberate product choice
 // (a teacher reuses their own material, not another teacher's), not a
 // storage/RLS limitation.
-export function useTeacherUploads(teacherId: number | undefined) {
+export function useTeacherUploads(teacherId: string | undefined) {
   const [uploads, setUploads] = useState<ContentUpload[]>([]);
   const [loading, setLoading] = useState(false);
 

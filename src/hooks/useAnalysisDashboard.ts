@@ -18,8 +18,8 @@ export interface AnalysisFilters {
   preset: DateRangePreset;
   customFrom?: string;
   customTo?: string;
-  teacherIds: number[];
-  coordinatorIds: number[];
+  teacherIds: string[];
+  coordinatorIds: string[];
   countries: string[];
   studentIds: string[];
   noShowType?: "any" | "no_show_1" | "no_show_2" | "no_show_plus";
@@ -78,8 +78,8 @@ export interface EntityStat {
 }
 
 export interface FilteredSessionRow {
-  teacherId: number | null;
-  coordinatorId: number | null;
+  teacherId: string | null;
+  coordinatorId: string | null;
   studentId: string | null;
   subjectId: number | null;
   programTypeId: number | null;
@@ -125,7 +125,7 @@ export interface AnalysisDashboardData {
   coordinatorStats: EntityStat[];
   enrollment: EnrollmentStats;
   rows: FilteredSessionRow[];
-  teacherNameMap: Map<number, string>;
+  teacherNameMap: Map<string, string>;
   studentNameMap: Map<string, string>;
 }
 
@@ -341,11 +341,11 @@ async function fetchDashboard(filters: AnalysisFilters): Promise<{ data: Analysi
 
   if (sessionsRes.error) return { data: { ...emptyDashboard(), enrollment: enrollmentStats }, error: sessionsRes.error.message };
 
-  const teacherNameMap = new Map<number, string>(
-    (teachersRes.data ?? []).map((t) => [t.id as number, `${t.first_name} ${t.last_name ?? ""}`.trim()])
+  const teacherNameMap = new Map<string, string>(
+    (teachersRes.data ?? []).map((t) => [t.id as string, `${t.first_name} ${t.last_name ?? ""}`.trim()])
   );
-  const teacherCountryMap = new Map<number, string>(
-    (teachersRes.data ?? []).map((t) => [t.id as number, (t.country as string | null) ?? "Unknown"])
+  const teacherCountryMap = new Map<string, string>(
+    (teachersRes.data ?? []).map((t) => [t.id as string, (t.country as string | null) ?? "Unknown"])
   );
   const subjectNameMap = new Map<string | number, string>((subjectsRes.data ?? []).map((s) => [s.id as number, s.name as string]));
   const programNameMap = new Map<string | number, string>((programTypesRes.data ?? []).map((p) => [p.id as number, p.name as string]));
@@ -357,8 +357,8 @@ async function fetchDashboard(filters: AnalysisFilters): Promise<{ data: Analysi
   );
 
   const rows: FilteredSessionRow[] = (sessionsRes.data ?? []).map((r) => ({
-    teacherId: r.teacher_id as number | null,
-    coordinatorId: r.coordinator_teacher_id as number | null,
+    teacherId: r.teacher_id as string | null,
+    coordinatorId: r.coordinator_teacher_id as string | null,
     studentId: r.student_id as string | null,
     subjectId: r.subject_id as number | null,
     programTypeId: r.program_type_id as number | null,
@@ -414,7 +414,7 @@ async function fetchDashboard(filters: AnalysisFilters): Promise<{ data: Analysi
   const noShowRate = rows.length > 0 ? round1((noShowCount / rows.length) * 100) : 0;
   const flaggedCount = taught.filter((r) => r.flagged).length;
   const flaggedRate = totalSessions > 0 ? round1((flaggedCount / totalSessions) * 100) : 0;
-  const activeTeachers = new Set(taught.map((r) => r.teacherId).filter((v): v is number => v !== null)).size;
+  const activeTeachers = new Set(taught.map((r) => r.teacherId).filter((v): v is string => v !== null)).size;
   const activeStudents = new Set(taught.map((r) => r.studentId).filter((v): v is string => v !== null)).size;
 
   const subjects = bucketBy(
@@ -472,14 +472,14 @@ async function fetchDashboard(filters: AnalysisFilters): Promise<{ data: Analysi
   let teacherStats = computeEntityStats(
     rows,
     (r) => r.teacherId,
-    (id) => teacherNameMap.get(Number(id)) ?? "Unknown",
-    (id) => teacherCountryMap.get(Number(id))
+    (id) => teacherNameMap.get(id) ?? "Unknown",
+    (id) => teacherCountryMap.get(id)
   );
   teacherStats = ensureIncluded(
     teacherStats,
     filters.teacherIds,
-    (id) => teacherNameMap.get(Number(id)) ?? "Unknown",
-    (id) => teacherCountryMap.get(Number(id))
+    (id) => teacherNameMap.get(id) ?? "Unknown",
+    (id) => teacherCountryMap.get(id)
   ).sort((a, b) => b.hours - a.hours);
 
   let studentStats = computeEntityStats(
@@ -498,9 +498,9 @@ async function fetchDashboard(filters: AnalysisFilters): Promise<{ data: Analysi
   let coordinatorStats = computeEntityStats(
     rows,
     (r) => r.coordinatorId,
-    (id) => teacherNameMap.get(Number(id)) ?? "Unknown"
+    (id) => teacherNameMap.get(id) ?? "Unknown"
   );
-  coordinatorStats = ensureIncluded(coordinatorStats, filters.coordinatorIds, (id) => teacherNameMap.get(Number(id)) ?? "Unknown").sort(
+  coordinatorStats = ensureIncluded(coordinatorStats, filters.coordinatorIds, (id) => teacherNameMap.get(id) ?? "Unknown").sort(
     (a, b) => b.sessions + b.noShowCount - (a.sessions + a.noShowCount)
   );
 

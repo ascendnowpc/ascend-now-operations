@@ -136,7 +136,7 @@ export default function TeacherHomeworkPage() {
   }, [subjects]);
   const teacherName = useMemo(() => {
     const m = new Map(teachers.map((t) => [t.id, `${t.first_name} ${t.last_name ?? ""}`.trim()]));
-    return (id: number | null) => (id != null ? m.get(id) ?? null : null);
+    return (id: string | null) => (id != null ? m.get(id) ?? null : null);
   }, [teachers]);
   const curriculumName = useMemo(() => {
     const m = new Map(curricula.map((c) => [c.id, c.name]));

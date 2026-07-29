@@ -57,7 +57,7 @@ export function useInvoices() {
 
   function buildLineItems(sessions: SessionLog[]) {
     const map = new Map<string, {
-      teacher_id: number | null;
+      teacher_id: string | null;
       subject_id: number | null;
       curriculum_id: number | null;
       student_package_id: number | null;

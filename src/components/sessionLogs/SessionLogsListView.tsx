@@ -43,7 +43,7 @@ function downloadCsv(rows: string[][], filename: string) {
 // each role's export already behaved before this component existed.
 function exportCsvForAdmin(
   logs: SessionLog[],
-  teacherLookup: Map<number, string>,
+  teacherLookup: Map<string, string>,
   subjectLookup: Map<number, string>,
   curriculumLookup: Map<number, string>,
   studentLookup: Map<string, Student>,
@@ -78,7 +78,7 @@ function exportCsvForAdmin(
 
 function exportCsvForTeacher(
   logs: SessionLog[],
-  teacherLookup: Map<number, Teacher>,
+  teacherLookup: Map<string, Teacher>,
   subjectLookup: Map<number, string>,
   studentLookup: Map<string, Student>
 ) {
@@ -150,7 +150,7 @@ export function SessionLogsListView({
   addDisabled?: boolean;
   detailPath: (id: number) => string;
   emptyMessage: string;
-  scopeToTeacherId?: number;
+  scopeToTeacherId?: string;
   // Restricts to a whole set of students at once (e.g. a Performance
   // Coach's assigned students), across every teacher who's logged a
   // session for them — unlike scopeToTeacherId, which scopes to one
@@ -193,7 +193,7 @@ export function SessionLogsListView({
     if (initialStudentParam) init.studentIdExact = initialStudentParam;
     if (subject) init.subjectId = Number(subject);
     if (curriculum) init.curriculumId = Number(curriculum);
-    if (teacher && !scopeToTeacherId) init.teacherId = Number(teacher);
+    if (teacher && !scopeToTeacherId) init.teacherId = teacher;
     return init;
   });
   // Prefill the visible "Student ID" box (admin/plain-teacher variant) so the
@@ -565,12 +565,12 @@ export function SessionLogsListView({
           </div>
           {showTeacher && (
             <SelectInput label="Teacher" placeholder="All teachers" value={filters.teacherId ? String(filters.teacherId) : ""}
-              onChange={(e) => setFilters((prev) => ({ ...prev, teacherId: e.target.value ? Number(e.target.value) : undefined }))}
+              onChange={(e) => setFilters((prev) => ({ ...prev, teacherId: e.target.value || undefined }))}
               options={teachers.map((t) => ({ value: String(t.id), label: `${t.first_name} ${t.last_name ?? ""}`.trim() }))} />
           )}
           {!hideCoordinatorFilter && (
             <SelectInput label="Performance Coach" placeholder="All performance coaches" value={filters.coordinatorId ? String(filters.coordinatorId) : ""}
-              onChange={(e) => setFilters((prev) => ({ ...prev, coordinatorId: e.target.value ? Number(e.target.value) : undefined }))}
+              onChange={(e) => setFilters((prev) => ({ ...prev, coordinatorId: e.target.value || undefined }))}
               options={performanceCoaches.map((t) => ({ value: String(t.id), label: `${t.first_name} ${t.last_name ?? ""}`.trim() }))} />
           )}
           <SelectInput label="No Show" placeholder="All sessions" value={filters.noShowType ?? ""}

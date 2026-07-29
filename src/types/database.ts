@@ -49,7 +49,7 @@ export interface Student {
 export interface PcStudentAssignment {
   id: number;
   student_id: string;
-  pc_teacher_id: number;
+  pc_teacher_id: string;
   assigned_at: string;
   unassigned_at: string | null;
 }
@@ -96,7 +96,7 @@ export interface PcCardEntry {
 // supabase/migrations/20260802000000_pc_profiles.sql.
 export interface PcProfile {
   id: number;
-  teacher_id: number;
+  teacher_id: string;
   department: string | null; // small badge above the name, e.g. "Management"
   headline: string; // subtitle under the name; defaults to "Performance Coach"
   photo_url: string | null; // public URL into the `pc-profiles` bucket
@@ -137,7 +137,7 @@ export interface SessionLogPoolResolution {
   id: number;
   student_id: string;
   course_type_id: number;
-  teacher_id: number;
+  teacher_id: string;
   subject_id: number | null;
   student_package_id: number;
   resolved_by_user_id: string;
@@ -184,7 +184,7 @@ export interface InvoicePackage {
 export interface InvoiceLineItem {
   id: number;
   invoice_id: number;
-  teacher_id: number | null;
+  teacher_id: string | null;
   subject_id: number | null;
   curriculum_id: number | null;
   // Which package/pool and course type this line belongs to (added
@@ -208,7 +208,7 @@ export interface InvoiceLineItem {
 }
 
 export interface Teacher {
-  id: number;
+  id: string; // e.g. "RANW26-3" — same mnemonic format as students/admins
   user_id: string | null;
   first_name: string;
   last_name: string | null;
@@ -223,7 +223,7 @@ export interface Teacher {
 
 export interface ZoomInvoice {
   id: number;
-  teacher_id: number;
+  teacher_id: string;
   period_month: string; // ISO date, first of month, e.g. "2026-07-01"
   file_url: string;
   uploaded_at: string;
@@ -241,7 +241,7 @@ export interface ZoomInvoiceWithTeacher extends ZoomInvoice {
 
 export interface TeacherSubject {
   id: number;
-  teacher_id: number;
+  teacher_id: string;
   subject_id: number;
   curriculum_id: number | null;
   created_at: string;
@@ -250,7 +250,7 @@ export interface TeacherSubject {
 export interface SubjectNote {
   id: number;
   student_id: string;
-  teacher_id: number;
+  teacher_id: string;
   subject_id: number;
   curriculum_id: number | null;
   title: string;
@@ -291,7 +291,7 @@ export interface Curriculum {
   name: string;
   sort_order: number;
   is_active: boolean;
-  added_by_teacher_id: number | null;
+  added_by_teacher_id: string | null;
   acknowledged_by_user_id: string | null;
   acknowledged_at: string | null;
   created_at: string;
@@ -331,7 +331,7 @@ export interface Subject {
   level: string | null;           // 'Standard Level', 'Higher Level', 'Advanced Subsidiary Level', etc.
   sort_order: number;
   is_active: boolean;
-  added_by_teacher_id: number | null;
+  added_by_teacher_id: string | null;
   acknowledged_by_user_id: string | null;
   acknowledged_at: string | null;
   created_at: string;
@@ -390,8 +390,8 @@ export interface SessionLog {
   // assigned the work) instead of a real coordinator/PC — see
   // SessionLogFormView.tsx/SessionLogDetailView.tsx, which relabel the
   // field for that program type rather than using a separate column.
-  coordinator_teacher_id: number | null;
-  teacher_id: number | null;
+  coordinator_teacher_id: string | null;
+  teacher_id: string | null;
   student_id: string | null; // e.g. "BATO26-1"
   student_first_name: string | null; // legacy free-text (pre-migration)
   student_last_name: string | null;  // legacy free-text (pre-migration)
@@ -447,7 +447,7 @@ export interface MonthlyReport {
 export interface MonthlyReportTeacherStat {
   id: number;
   report_id: number;
-  teacher_id: number | null;
+  teacher_id: string | null;
   teacher_name: string | null;
   sessions: number;
   hours: number;
@@ -470,7 +470,7 @@ export interface MonthlyReportStudentStat {
 export interface MonthlyReportTeacherSubjectStat {
   id: number;
   report_id: number;
-  teacher_id: number | null;
+  teacher_id: string | null;
   teacher_name: string | null;
   subject_id: number | null;
   subject_name: string | null;
@@ -547,7 +547,7 @@ export interface EnrollmentRequest {
   graduation_year: number | null;
   birthday: string | null;
   school: string | null;
-  pc_teacher_id: number | null; // required for new_student, unused for renewal
+  pc_teacher_id: string | null; // required for new_student, unused for renewal
   status: EnrollmentStatus;
   payment_link_token: string; // uuid
   rejection_reason: string | null;
@@ -613,7 +613,7 @@ export interface PackageRenewalRequest {
   requested_hours: number | null; // PC's suggested hours, optional
   package_size_label: string | null;
   note: string | null;
-  requested_by_teacher_id: number; // the requesting PC
+  requested_by_teacher_id: string; // the requesting PC
   status: PackageRenewalStatus;
   acknowledged_by_user_id: string | null;
   acknowledged_at: string | null;
@@ -757,7 +757,7 @@ export interface ContentScope {
 export interface ContentUpload {
   id: number;
   student_id: string;
-  uploaded_by_teacher_id: number;
+  uploaded_by_teacher_id: string;
   file_name: string;
   file_url: string; // object path within the private `homework-content` bucket
   file_type: string;
@@ -831,7 +831,7 @@ export interface GeneratedPaperContent {
 export interface GeneratedPaper {
   id: number;
   student_id: string;
-  created_by_teacher_id: number;
+  created_by_teacher_id: string;
   subject_id: number | null;
   curriculum_id: number | null;
   content_source_type: ContentSourceType;
@@ -943,7 +943,7 @@ export interface QuestionGrade {
   graded_by: 'auto' | 'ai' | 'manual';
   feedback?: string;
   per_point?: QuestionGradePoint[]; // AI-graded types: per mark-scheme point
-  teacher_override?: { awarded: number; marked_by: number; marked_at: string } | null;
+  teacher_override?: { awarded: number; marked_by: string; marked_at: string } | null;
   annotations?: Annotation[]; // manual (photo-answer) grading only
 }
 
@@ -969,7 +969,7 @@ export interface Grade {
   total_marks: number | null;
   max_marks: number | null;
   graded_at: string | null;
-  teacher_reviewed_by: number | null;
+  teacher_reviewed_by: string | null;
   teacher_reviewed_at: string | null;
   // Set (as a pending placeholder) when the paper's submission has a
   // whole_paper_answer — see WholePaperGrade.
@@ -980,7 +980,7 @@ export interface Grade {
   // Enforced by RLS, not just the UI: "Students can read their own published
   // grades" requires published_at is not null.
   published_at: string | null;
-  published_by_teacher_id: number | null;
+  published_by_teacher_id: string | null;
   created_at: string;
 }
 
@@ -1020,7 +1020,7 @@ export type PrimaryRelationshipOwner = 'devi' | 'pc_cc' | 'ascend_now_system';
 export interface CoordinatorLog {
   id: number;
   student_id: string;
-  teacher_id: number; // the logging PC
+  teacher_id: string; // the logging PC
   log_date: string; // ISO date
 
   course_type_ids: number[]; // "type(s) of program/package" — multi-select

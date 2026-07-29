@@ -253,10 +253,10 @@ export function StudentSessionsView({ student }: { student: Student }) {
               className="w-full rounded-lg border border-navy-100 px-3 py-2 text-sm text-navy-700 bg-white focus:outline-none focus:ring-2 focus:ring-sky-300" />
           </div>
           <SelectInput label="Teacher" placeholder="All teachers" value={filters.teacherId ? String(filters.teacherId) : ""}
-            onChange={(e) => setFilters((prev) => ({ ...prev, teacherId: e.target.value ? Number(e.target.value) : undefined }))}
+            onChange={(e) => setFilters((prev) => ({ ...prev, teacherId: e.target.value || undefined }))}
             options={teachers.map((t) => ({ value: String(t.id), label: `${t.first_name} ${t.last_name ?? ""}`.trim() }))} />
           <SelectInput label="Performance Coach" placeholder="All performance coaches" value={filters.coordinatorId ? String(filters.coordinatorId) : ""}
-            onChange={(e) => setFilters((prev) => ({ ...prev, coordinatorId: e.target.value ? Number(e.target.value) : undefined }))}
+            onChange={(e) => setFilters((prev) => ({ ...prev, coordinatorId: e.target.value || undefined }))}
             options={performanceCoaches.map((t) => ({ value: String(t.id), label: `${t.first_name} ${t.last_name ?? ""}`.trim() }))} />
           <SelectInput label="No Show" placeholder="All sessions" value={filters.noShowType ?? ""}
             onChange={(e) => setFilters((prev) => ({ ...prev, noShowType: e.target.value ? (e.target.value as SessionLogFilters['noShowType']) : undefined }))}

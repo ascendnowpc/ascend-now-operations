@@ -2,13 +2,10 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "../lib/supabaseClient";
 import type { Student } from "../types/database";
 import { getCached, setCached, invalidateCachePrefix } from "../lib/cache";
-
-function studentSeqNumber(id: string) {
-  return parseInt(/(\d+)$/.exec(id)?.[1] ?? "", 10) || 0;
-}
+import { idSeqNumber } from "../utils/entityId";
 
 function byIdNum(a: Student, b: Student) {
-  return studentSeqNumber(a.id) - studentSeqNumber(b.id);
+  return idSeqNumber(a.id) - idSeqNumber(b.id);
 }
 
 // PostgREST caps any single request at this project's max-rows setting

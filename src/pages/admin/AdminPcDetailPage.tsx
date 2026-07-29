@@ -37,7 +37,7 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
 // intentionally NOT the PC Assignments page — no assign/unassign here.
 export default function AdminPcDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const pcId = Number(id);
+  const pcId = id!;
   const navigate = useNavigate();
   const { activeAssignments, loading: loadingAssignments } = usePcAssignments();
   const [pc, setPc] = useState<Teacher | null>(null);
@@ -55,7 +55,7 @@ export default function AdminPcDetailPage() {
   useEffect(() => {
     if (!id) return;
     setLoadingPc(true);
-    fetchTeacherById(Number(id)).then(({ data }) => {
+    fetchTeacherById(id).then(({ data }) => {
       setPc(data ?? null);
       setLoadingPc(false);
     });
@@ -235,7 +235,7 @@ export default function AdminPcDetailPage() {
 // Edit button, or the full editor. Reuses the same PcProfileEditor/PcProfileCard
 // the rest of the app uses; usePcProfile keyed on the coach's teacher id lets
 // an admin upsert any coach's row (RLS: is_admin() → ALL).
-function ProfileTab({ pcId, coachName }: { pcId: number; coachName: string }) {
+function ProfileTab({ pcId, coachName }: { pcId: string; coachName: string }) {
   const { profile, loading, uploadPhoto, save } = usePcProfile(pcId);
   const [editing, setEditing] = useState(false);
   const hasProfile = !!profile && profile.is_published;

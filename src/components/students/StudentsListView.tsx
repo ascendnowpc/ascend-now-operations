@@ -158,7 +158,7 @@ export function StudentsListView({
   // student, so the dropdown stays short and every option returns a result.
   // "__unassigned__" is offered whenever some student has no PC.
   const availablePcs = useMemo(() => {
-    const ids = new Set<number>();
+    const ids = new Set<string>();
     let hasUnassigned = false;
     for (const s of students) {
       const pcId = getPcForStudent(s.id);
@@ -166,7 +166,7 @@ export function StudentsListView({
       else hasUnassigned = true;
     }
     const list = Array.from(ids)
-      .map((id) => ({ id: String(id), name: teacherLookup.get(id) ?? `#${id}` }))
+      .map((id) => ({ id, name: teacherLookup.get(id) ?? `#${id}` }))
       .sort((a, b) => a.name.localeCompare(b.name));
     return { list, hasUnassigned };
   }, [students, getPcForStudent, teacherLookup]);

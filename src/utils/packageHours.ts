@@ -75,8 +75,8 @@ export function computeHoursUsedBySubject(
 // vs. sessionCount split as computeHoursUsedBySubject above.
 export function computeHoursUsedByTeacher(
   sessionLogs: Pick<SessionLog, "session_duration_hrs" | "no_show_type" | "teacher_id">[]
-): { teacherId: number; hours: number; sessionCount: number; noShowCount: number }[] {
-  const totals = new Map<number, { teacherId: number; hours: number; sessionCount: number; noShowCount: number }>();
+): { teacherId: string; hours: number; sessionCount: number; noShowCount: number }[] {
+  const totals = new Map<string, { teacherId: string; hours: number; sessionCount: number; noShowCount: number }>();
   for (const s of sessionLogs) {
     if (isNonBillableNoShow(s.no_show_type) || s.teacher_id == null) continue;
     const isNoShow = s.no_show_type != null;

@@ -326,7 +326,7 @@ export function useStudentPackages() {
   const createPoolResolution = useCallback(async (opts: {
     studentId: string;
     courseTypeId: number;
-    teacherId: number;
+    teacherId: string;
     subjectId: number | null;
     studentPackageId: number;
     resolvedByUserId: string;
@@ -340,7 +340,7 @@ export function useStudentPackages() {
   async function upsertPoolResolution(opts: {
     studentId: string;
     courseTypeId: number;
-    teacherId: number;
+    teacherId: string;
     subjectId: number | null;
     studentPackageId: number;
     resolvedByUserId: string;

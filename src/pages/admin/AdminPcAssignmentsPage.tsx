@@ -28,13 +28,13 @@ export default function AdminPcAssignmentsPage() {
   const loading = loadingStudents || loadingTeachers || loadingAssignments;
 
   const [search, setSearch] = useState("");
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
-  const [addingFor, setAddingFor] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [addingFor, setAddingFor] = useState<string | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [saving, setSaving] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
 
-  function toggleExpand(pcId: number) {
+  function toggleExpand(pcId: string) {
     setExpanded((s) => {
       const n = new Set(s);
       n.has(pcId) ? n.delete(pcId) : n.add(pcId);
@@ -44,7 +44,7 @@ export default function AdminPcAssignmentsPage() {
 
   const assignedIds = new Set(activeAssignments.map((a) => a.student_id));
 
-  async function handleAssign(pcId: number) {
+  async function handleAssign(pcId: string) {
     if (!selectedStudent) return;
     if (assignedIds.has(selectedStudent.id)) {
       setAssignError(`${selectedStudent.first_name} ${selectedStudent.last_name} is already assigned to a PC.`);
@@ -63,7 +63,7 @@ export default function AdminPcAssignmentsPage() {
     await unassignStudent(studentId);
   }
 
-  function openAdd(pcId: number) {
+  function openAdd(pcId: string) {
     setAddingFor(pcId);
     setSelectedStudent(null);
     setAssignError(null);

@@ -319,7 +319,7 @@ export function CoordinatorLogFormView({
 
     const input: CoordinatorLogInput = {
       student_id: selectedStudentId,
-      teacher_id: Number(effectiveTeacherId),
+      teacher_id: effectiveTeacherId,
       log_date: logDate,
       course_type_ids: courseTypeIds,
       primary_goal_option_id: primaryGoalOptionId ? Number(primaryGoalOptionId) : null,

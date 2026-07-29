@@ -42,7 +42,7 @@ export function TeacherSubjectEditor({
   variant,
   header,
 }: {
-  teacherId: number;
+  teacherId: string;
   allSubjects: Subject[];
   curricula: Curriculum[];
   allGroups: CurriculumGroup[];

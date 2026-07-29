@@ -5,7 +5,7 @@ import { getCached, setCached, invalidateCachePrefix } from "../lib/cache";
 
 export interface CoordinatorLogFilters {
   studentId?: string;
-  teacherId?: number;
+  teacherId?: string;
   courseTypeId?: number;
   primaryGoalOptionId?: number;
   progressStatusOptionId?: number;

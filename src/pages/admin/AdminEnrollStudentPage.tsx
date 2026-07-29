@@ -77,7 +77,7 @@ export default function AdminEnrollStudentPage() {
   // the confirm step (review-enrollment-payment) recreates those pools from
   // the course type's name, so no per-pool data has to be captured here.
   const activeCourseTypes = courseTypes.filter((ct) => ct.is_active);
-  const teacherName = (id: number | null) => {
+  const teacherName = (id: string | null) => {
     const t = teachers.find((t) => t.id === id);
     return t ? `${t.first_name} ${t.last_name ?? ""}`.trim() : "Unassigned";
   };
@@ -296,7 +296,7 @@ export default function AdminEnrollStudentPage() {
             graduation_year: null,
             birthday: null,
             school: null,
-            pc_teacher_id: pcTeacherId ? Number(pcTeacherId) : null,
+            pc_teacher_id: pcTeacherId ? pcTeacherId : null,
             packages: packageInputs,
           };
 
@@ -320,7 +320,7 @@ export default function AdminEnrollStudentPage() {
     const coordinatorName =
       kind === "renewal" && selectedStudent
         ? teacherName(getPcForStudent(selectedStudent.id))
-        : teacherName(pcTeacherId ? Number(pcTeacherId) : null);
+        : teacherName(pcTeacherId ? pcTeacherId : null);
 
     const pdfDoc = buildEnrollmentInvoicePdf({
       kindLabel: kind === "new_student" ? "New Enrollment" : "Package Renewal",

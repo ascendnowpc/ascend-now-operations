@@ -30,7 +30,7 @@ function SubjectEditRow({
   subject: Subject;
   onSave: (id: number, input: Partial<Subject>) => Promise<{ data: Subject | null; error: string | null }>;
   onDeactivate: () => void;
-  teacherLookup?: Map<number, string>;
+  teacherLookup?: Map<string, string>;
   /** Override the row's display label (used when nested under a subject group header, e.g. just "Higher Level"). */
   displayLabel?: string;
 }) {
@@ -142,7 +142,7 @@ function SubjectListEditor({
   inactiveSubjects: Subject[];
   showAddForm: boolean;
   updateSubject: (id: number, input: Partial<Subject>) => Promise<{ data: Subject | null; error: string | null }>;
-  teacherLookup?: Map<number, string>;
+  teacherLookup?: Map<string, string>;
   newSubject: { name: string; board: string; code: string; level: string };
   setNewSubject: React.Dispatch<React.SetStateAction<{ name: string; board: string; code: string; level: string }>>;
   addingSubject: boolean;
@@ -297,7 +297,7 @@ function AcademicsTab({
   createSubject: (input: { name: string; category: string; category_id?: number; curriculum_group_id?: number; curriculum_id?: number; board?: string; subject_code?: string; level?: string }) => Promise<{ data: Subject | null; error: string | null }>;
   updateSubject: (id: number, input: Partial<Subject>) => Promise<{ data: Subject | null; error: string | null }>;
   categories: SubjectCategory[];
-  teacherLookup?: Map<number, string>;
+  teacherLookup?: Map<string, string>;
 }) {
   const [expandedCurricula, setExpandedCurricula] = useState<Set<number>>(new Set());
   const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
@@ -725,7 +725,7 @@ function FlatSubjectsTab({
   subjects: Subject[];
   createSubject: (input: { name: string; category: string; category_id?: number }) => Promise<{ data: Subject | null; error: string | null }>;
   updateSubject: (id: number, input: Partial<Subject>) => Promise<{ data: Subject | null; error: string | null }>;
-  teacherLookup?: Map<number, string>;
+  teacherLookup?: Map<string, string>;
   matchesCategory: (category: string) => boolean;
   newSubjectCategory: string;
   addPlaceholder: string;
@@ -1011,8 +1011,8 @@ export function SubjectsLibraryContent() {
 
   const pendingTeacherIds = [
     ...new Set([
-      ...subjects.filter((s) => s.added_by_teacher_id != null && !s.acknowledged_at).map((s) => s.added_by_teacher_id as number),
-      ...curricula.filter((c) => c.added_by_teacher_id != null && !c.acknowledged_at).map((c) => c.added_by_teacher_id as number),
+      ...subjects.filter((s) => s.added_by_teacher_id != null && !s.acknowledged_at).map((s) => s.added_by_teacher_id as string),
+      ...curricula.filter((c) => c.added_by_teacher_id != null && !c.acknowledged_at).map((c) => c.added_by_teacher_id as string),
     ]),
   ];
   const teacherLookup = useTeacherNames(pendingTeacherIds);

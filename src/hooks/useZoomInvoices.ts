@@ -6,7 +6,7 @@ export function useZoomInvoices() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchMyZoomInvoices = useCallback(async (teacherId: number) => {
+  const fetchMyZoomInvoices = useCallback(async (teacherId: string) => {
     setLoading(true);
     const { data, error } = await supabase
       .from("zoom_invoices")
@@ -31,7 +31,7 @@ export function useZoomInvoices() {
     return (data ?? []) as ZoomInvoiceWithTeacher[];
   }, []);
 
-  async function uploadZoomInvoiceFile(file: File, teacherId: number, periodMonth: string) {
+  async function uploadZoomInvoiceFile(file: File, teacherId: string, periodMonth: string) {
     const ext = file.name.split(".").pop() ?? "bin";
     const fileName = `zoom-invoices/${teacherId}/${periodMonth}_${Date.now()}.${ext}`;
     const { error } = await supabase.storage
@@ -46,7 +46,7 @@ export function useZoomInvoices() {
   // (re-uploading resets status back to "pending" — blocked by RLS once the
   // existing row is already "acknowledged", so an admin has to undo it first).
   const upsertZoomInvoice = useCallback(async (opts: {
-    teacherId: number;
+    teacherId: string;
     periodMonth: string; // "YYYY-MM-01"
     file: File;
     uploadedByUserId: string;

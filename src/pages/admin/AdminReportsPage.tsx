@@ -34,7 +34,7 @@ import type { Teacher, Student, NoShowType, BundlePoolSetting, CoordinatorLogOpt
 type ReportTab = "monthly-revenue" | "reports";
 
 interface TeacherStat {
-  teacherId: number | null;
+  teacherId: string | null;
   teacherName: string;
   sessions: number;
   hours: number;
@@ -78,18 +78,18 @@ async function fetchAllTeachersPeriodDetail(year: number, month: number): Promis
     supabase.from("students").select("id, first_name, last_name"),
   ]);
 
-  const teacherLookup = new Map((teachers ?? []).map((t) => [t.id as number, t as Teacher]));
+  const teacherLookup = new Map((teachers ?? []).map((t) => [t.id as string, t as Teacher]));
   const studentLookup = new Map((students ?? []).map((s) => [s.id as string, `${s.first_name} ${s.last_name}`.trim()]));
 
-  const subjectsByTeacher = new Map<number, string[]>();
+  const subjectsByTeacher = new Map<string, string[]>();
   for (const ts of teacherSubjects ?? []) {
     const subj = (ts.subjects as unknown as { name: string; level: string | null } | null);
     if (!subj) continue;
     const curr = (ts.curricula as unknown as { name: string } | null);
     const label = subjLabel(subj.name, subj.level);
-    const list = subjectsByTeacher.get(ts.teacher_id as number) ?? [];
+    const list = subjectsByTeacher.get(ts.teacher_id as string) ?? [];
     list.push(curr ? `${curr.name} – ${label}` : label);
-    subjectsByTeacher.set(ts.teacher_id as number, list);
+    subjectsByTeacher.set(ts.teacher_id as string, list);
   }
 
   interface Accum {
@@ -98,10 +98,10 @@ async function fetchAllTeachersPeriodDetail(year: number, month: number): Promis
     totalHours: number;
     totalSessions: number;
   }
-  const perTeacher = new Map<number, Accum>();
+  const perTeacher = new Map<string, Accum>();
 
   for (const s of sessions ?? []) {
-    const tid = s.teacher_id as number | null;
+    const tid = s.teacher_id as string | null;
     if (!tid) continue;
     if (!perTeacher.has(tid)) perTeacher.set(tid, { breakdownMap: new Map(), noShows: [], totalHours: 0, totalSessions: 0 });
     const acc = perTeacher.get(tid)!;
@@ -269,22 +269,22 @@ async function fetchPeriodData(year: number, month: number): Promise<PeriodData>
   if (sessionsError) return { ...empty, error: sessionsError.message };
   if (!sessions) return empty;
 
-  const teacherNameMap = new Map<number, string>();
+  const teacherNameMap = new Map<string, string>();
   for (const t of teachers ?? []) {
-    teacherNameMap.set(t.id as number, `${t.first_name} ${t.last_name ?? ""}`.trim());
+    teacherNameMap.set(t.id as string, `${t.first_name} ${t.last_name ?? ""}`.trim());
   }
   const studentNameMap = new Map<string, string>();
   for (const s of students ?? []) {
     studentNameMap.set(s.id as string, `${s.first_name} ${s.last_name ?? ""}`.trim());
   }
 
-  const teacherMap = new Map<number | null, TeacherStat>();
+  const teacherMap = new Map<string | null, TeacherStat>();
   const studentMap = new Map<string, StudentStat>();
   let hours = 0, sessions_count = 0, billableHours = 0, billableSessions = 0, noShows = 0;
   const studentSet = new Set<string>();
 
   for (const s of sessions) {
-    const tid = s.teacher_id as number | null;
+    const tid = s.teacher_id as string | null;
     const sid = (s.student_id as string | null) ?? null;
     const hrs = (s.session_duration_hrs as number) ?? 0;
     const isNoShow = s.no_show_type !== null;
@@ -366,7 +366,7 @@ async function fetchMonthSubjectBreakdown(year: number, month: number): Promise<
     supabase.from("students").select("id, first_name, last_name"),
   ]);
 
-  const teacherLookup = new Map((teachers ?? []).map((t) => [t.id as number, `${t.first_name} ${t.last_name ?? ""}`.trim()]));
+  const teacherLookup = new Map((teachers ?? []).map((t) => [t.id as string, `${t.first_name} ${t.last_name ?? ""}`.trim()]));
   const studentLookup = new Map((students ?? []).map((s) => [s.id as string, `${s.first_name} ${s.last_name}`.trim()]));
 
   const teacherMap = new Map<string, TeacherSubjectStatInput>();
@@ -375,7 +375,7 @@ async function fetchMonthSubjectBreakdown(year: number, month: number): Promise<
 
   for (const s of sessions ?? []) {
     if (s.no_show_type !== null) continue; // breakdown excludes no-shows, matching fetchPeriodData's convention
-    const tid = s.teacher_id as number | null;
+    const tid = s.teacher_id as string | null;
     const sid = s.student_id as string | null;
     // Student-side rows are billable only (course_type_id set), matching
     // fetchPeriodData's studentStats — teacher/subject rollups stay
@@ -501,9 +501,9 @@ async function fetchStudentPeriodDetail(studentId: string, year: number, month: 
       .order("session_date", { ascending: true }),
   ]);
 
-  const teacherNameMap = new Map<number, string>();
+  const teacherNameMap = new Map<string, string>();
   for (const t of teachers ?? []) {
-    teacherNameMap.set(t.id as number, `${t.first_name} ${t.last_name ?? ""}`.trim());
+    teacherNameMap.set(t.id as string, `${t.first_name} ${t.last_name ?? ""}`.trim());
   }
   const packageMetaById = new Map<number, PackageMeta>(
     (packages ?? []).map((p) => [p.id as number, { course_type_id: p.course_type_id as number, package_type_id: (p.package_type_id as number | null) ?? null, pool_label: (p.pool_label as string | null) ?? null }])
@@ -525,7 +525,7 @@ async function fetchStudentPeriodDetail(studentId: string, year: number, month: 
     const subj = (s.subjects as unknown as { name: string; level: string | null } | null);
     const curr = (s.curricula as unknown as { name: string } | null);
     const prog = (s.program_types as unknown as { name: string } | null);
-    const tid = s.teacher_id as number | null;
+    const tid = s.teacher_id as string | null;
     const teacherName = tid ? (teacherNameMap.get(tid) ?? "Unknown teacher") : "Unknown teacher";
     const isNoShow = s.no_show_type !== null;
     const hrs = (s.session_duration_hrs as number) ?? 0;
@@ -1562,14 +1562,14 @@ async function fetchMonthSessionLogRows(year: number, month: number): Promise<Mo
     supabase.from("students").select("id, first_name, last_name"),
   ]);
 
-  const teacherLookup = new Map((teachers ?? []).map((t) => [t.id as number, `${t.first_name} ${t.last_name ?? ""}`.trim()]));
+  const teacherLookup = new Map((teachers ?? []).map((t) => [t.id as string, `${t.first_name} ${t.last_name ?? ""}`.trim()]));
   const studentLookup = new Map((students ?? []).map((s) => [s.id as string, `${s.first_name} ${s.last_name}`.trim()]));
 
   return (sessions ?? []).map((s) => {
     const subj = (s.subjects as unknown as { name: string; level: string | null } | null);
     const curr = (s.curricula as unknown as { name: string } | null);
     const prog = (s.program_types as unknown as { name: string } | null);
-    const tid = s.teacher_id as number | null;
+    const tid = s.teacher_id as string | null;
     const isNoShow = s.no_show_type !== null;
     const hrs = (s.session_duration_hrs as number) ?? 0;
     const studentName = s.student_id

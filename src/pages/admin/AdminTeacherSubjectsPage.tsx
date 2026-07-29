@@ -21,7 +21,7 @@ export default function AdminTeacherSubjectsPage() {
   const teachers = mergeWithSubjects(rawTeachers, subjectsByTeacher);
   const [teacherSearch, setTeacherSearch] = useState("");
   const [subjectSearch, setSubjectSearch] = useState("");
-  const [selectedTeacherId, setSelectedTeacherId] = useState<number | null>(null);
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
 
   function getLabel(subjectId: number, curriculumId: number | null): string {
     const sub = allSubjects.find((s) => s.id === subjectId);

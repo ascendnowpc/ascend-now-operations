@@ -14,6 +14,7 @@ import { useCurricula } from "../../hooks/useCurricula";
 import { useAllCurriculumGroups, subjectDisplayLabel } from "../../hooks/useCurriculumGroups";
 import { SubjectLevelSelect } from "../../components/ui/SubjectLevelSelect";
 import type { TeacherWithSubjects } from "../../types/database";
+import { idSeqNumber } from "../../utils/entityId";
 
 // Every subject lives under exactly one of these three branches — see
 // db/docs/SUBJECT_HIERARCHY.md §1. Not expected to grow without a wider
@@ -69,7 +70,7 @@ export default function AdminTeachersPage() {
   const { groups: allGroups } = useAllCurriculumGroups();
   // Ordered by ID rather than the hook's default name sort (the shared
   // useTeachers order stays alphabetical for the coach dropdowns elsewhere).
-  const byId = (a: TeacherWithSubjects, b: TeacherWithSubjects) => a.id - b.id;
+  const byId = (a: TeacherWithSubjects, b: TeacherWithSubjects) => idSeqNumber(a.id) - idSeqNumber(b.id);
   // Teachers only — performance coaches are listed under their own PC page
   // (/admin/pcs). A PC is a teacher with is_performance_coach = true.
   const activeTeachers = mergeWithSubjects(rawTeachers.filter((t) => t.is_active && !t.is_performance_coach), subjectsByTeacher).sort(byId);

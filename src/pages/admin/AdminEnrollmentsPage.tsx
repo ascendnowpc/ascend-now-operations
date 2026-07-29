@@ -97,7 +97,7 @@ export default function AdminEnrollmentsPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
-  function teacherName(id: number | null) {
+  function teacherName(id: string | null) {
     const t = teachers.find((t) => t.id === id);
     return t ? `${t.first_name} ${t.last_name ?? ""}`.trim() : "Unassigned";
   }

@@ -38,7 +38,7 @@ export function useSubjectNotes(studentId: string | null) {
 
   async function addNote(input: {
     student_id: string;
-    teacher_id: number;
+    teacher_id: string;
     subject_id: number;
     curriculum_id: number | null;
     title: string;
