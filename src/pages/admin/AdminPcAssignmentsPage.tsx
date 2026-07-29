@@ -80,7 +80,7 @@ export default function AdminPcAssignmentsPage() {
   const visibleCoaches = useMemo(() => {
     if (!q) return coaches;
     return coaches.filter((pc) => {
-      const nameMatch = `${pc.first_name} ${pc.last_name ?? ""}`.toLowerCase().includes(q);
+      const nameMatch = `${pc.id} ${pc.first_name} ${pc.last_name ?? ""}`.toLowerCase().includes(q);
       if (nameMatch) return true;
       const studentMatch = activeAssignments
         .filter((a) => a.pc_teacher_id === pc.id)
@@ -134,7 +134,7 @@ export default function AdminPcAssignmentsPage() {
         <div className="mb-5">
           <input
             type="text"
-            placeholder="Search by coach or student name…"
+            placeholder="Search by coach or student name or ID…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full max-w-sm rounded-xl border border-navy-100 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"

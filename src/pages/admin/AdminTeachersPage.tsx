@@ -107,7 +107,7 @@ export default function AdminTeachersPage() {
   function applyFilters(list: TeacherWithSubjects[]) {
     return list.filter((t) => {
       const ts = t.teacher_subjects ?? [];
-      const nameMatch = `${t.first_name} ${t.last_name ?? ""} ${t.email ?? ""}`.toLowerCase().includes(search.toLowerCase());
+      const nameMatch = `${t.id} ${t.first_name} ${t.last_name ?? ""} ${t.email ?? ""}`.toLowerCase().includes(search.toLowerCase());
       const countryMatch = !filterCountry || t.country === filterCountry;
       const typeMatch =
         !filterSubjectType ||
@@ -175,8 +175,8 @@ export default function AdminTeachersPage() {
       <Card className="p-4 mb-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <TextInput
-            label="Search name / email"
-            placeholder="Name or email…"
+            label="Search name / email / ID"
+            placeholder="Name, email or ID…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />

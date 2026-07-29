@@ -36,7 +36,7 @@ export default function AdminTeacherSubjectsPage() {
   }
 
   const filtered = teachers.filter((t) => {
-    const nameMatch = `${t.first_name} ${t.last_name ?? ""}`.toLowerCase().includes(teacherSearch.toLowerCase());
+    const nameMatch = `${t.id} ${t.first_name} ${t.last_name ?? ""}`.toLowerCase().includes(teacherSearch.toLowerCase());
     const subjectMatch =
       !subjectSearch.trim() ||
       (t.teacher_subjects ?? []).some((s) =>
@@ -62,8 +62,8 @@ export default function AdminTeacherSubjectsPage() {
 
       <div className="flex gap-3 mb-5 max-w-xl">
         <TextInput
-          label="Search by teacher name"
-          placeholder="Name…"
+          label="Search by teacher name or ID"
+          placeholder="Name or ID…"
           value={teacherSearch}
           onChange={(e) => setTeacherSearch(e.target.value)}
         />

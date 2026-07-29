@@ -57,7 +57,7 @@ export default function AdminPcsPage() {
 
   function applyFilters(list: Teacher[]) {
     return list.filter((t) => {
-      const nameMatch = `${t.first_name} ${t.last_name ?? ""} ${t.email ?? ""}`.toLowerCase().includes(search.toLowerCase());
+      const nameMatch = `${t.id} ${t.first_name} ${t.last_name ?? ""} ${t.email ?? ""}`.toLowerCase().includes(search.toLowerCase());
       const countryMatch = !filterCountry || t.country === filterCountry;
       return nameMatch && countryMatch;
     });
@@ -116,8 +116,8 @@ export default function AdminPcsPage() {
       <Card className="p-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <TextInput
-            label="Search name / email"
-            placeholder="Name or email…"
+            label="Search name / email / ID"
+            placeholder="Name, email or ID…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />

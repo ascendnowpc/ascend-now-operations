@@ -7,36 +7,23 @@ import { TextInput, SelectInput, PhoneInput } from "../../components/ui/Input";
 import { Card } from "../../components/ui/Card";
 import { IconPlus } from "../../components/ui/icons";
 import { useUsers } from "../../hooks/useUsers";
+import { useAdmins } from "../../hooks/useAdmins";
 import { invokeEdgeFunction, describeFunctionError } from "../../lib/edgeFunctions";
-import { supabase } from "../../lib/supabaseClient";
 import { COUNTRY_OPTIONS, COUNTRY_DIAL_CODES } from "../../data/countries";
 import type { AppUser } from "../../types/database";
 
 type AdminRow = AppUser & { admin_phone: string | null; admin_country: string | null };
 
 export default function AdminAdminsPage() {
-  const { users, loading, refetch } = useUsers();
+  const { users, loading, refetch, updateUser } = useUsers();
+  const { admins: adminRecords, refetch: refetchAdmins, updateAdminByUserId } = useAdmins();
 
-  // admins.phone_number/country live on the admins table, not users — fetch
-  // and key by user_id so they can be merged onto the users-table rows below.
-  const [adminExtras, setAdminExtras] = useState<
-    Record<string, { phone_number: string | null; country: string | null }>
-  >({});
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase.from("admins").select("user_id, phone_number, country");
-      if (cancelled || !data) return;
-      const map: Record<string, { phone_number: string | null; country: string | null }> = {};
-      for (const row of data as { user_id: string; phone_number: string | null; country: string | null }[]) {
-        map[row.user_id] = { phone_number: row.phone_number, country: row.country };
-      }
-      setAdminExtras(map);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [users]);
+  // admins.phone_number/country live on the admins table, not users — merge
+  // by user_id onto the users-table rows below.
+  const adminExtras: Record<string, { phone_number: string | null; country: string | null }> = {};
+  for (const a of adminRecords) {
+    adminExtras[a.user_id] = { phone_number: a.phone_number, country: a.country };
+  }
 
   const admins: AdminRow[] = users
     .filter((u) => u.role === "admin")
@@ -111,6 +98,79 @@ export default function AdminAdminsPage() {
     setError(null);
   }
 
+  // ── Edit an existing admin (any admin can edit any admin's details) ──
+  const [editingAdmin, setEditingAdmin] = useState<AdminRow | null>(null);
+  const [editFullName, setEditFullName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editCountry, setEditCountry] = useState("");
+  const [editDialCode, setEditDialCode] = useState("+1");
+  const [editPhoneNumber, setEditPhoneNumber] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  function openEdit(admin: AdminRow) {
+    setShowForm(false);
+    setSuccess(null);
+    setEditFullName(admin.full_name ?? "");
+    setEditEmail(admin.email);
+    setEditCountry(admin.admin_country ?? "");
+    // Parse stored phone back into dial code + number if it starts with +
+    const stored = admin.admin_phone ?? "";
+    const match = stored.match(/^(\+\d{1,4})\s*(.*)$/);
+    if (match) { setEditDialCode(match[1]); setEditPhoneNumber(match[2]); }
+    else { setEditDialCode("+1"); setEditPhoneNumber(stored); }
+    setEditError(null);
+    setEditingAdmin(admin);
+  }
+
+  function cancelEdit() {
+    setEditingAdmin(null);
+    setEditError(null);
+  }
+
+  async function handleEditSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!editingAdmin) return;
+    if (!editFullName.trim()) { setEditError("Full name is required."); return; }
+    setEditSaving(true);
+    setEditError(null);
+
+    const trimmedEmail = editEmail.trim();
+
+    // Email change goes through update-user-email first (targeting the
+    // edited admin's user id) so a failure — e.g. address already taken —
+    // aborts the save before name/contact fields are touched, same ordering
+    // AdminProfilePage/AdminTeacherFormPage use for the same reason.
+    if (trimmedEmail && trimmedEmail.toLowerCase() !== editingAdmin.email.toLowerCase()) {
+      const { data, error: invokeErr } = await invokeEdgeFunction(
+        "update-user-email",
+        { body: { newEmail: trimmedEmail, targetUserId: editingAdmin.id } }
+      );
+      const emailMessage = invokeErr
+        ? await describeFunctionError(invokeErr)
+        : (data as { error?: string } | null)?.error ?? null;
+      if (emailMessage) { setEditSaving(false); setEditError(emailMessage); return; }
+    }
+
+    if (editFullName.trim() !== (editingAdmin.full_name ?? "")) {
+      const { error } = await updateUser(editingAdmin.id, { full_name: editFullName.trim() });
+      if (error) { setEditSaving(false); setEditError(error); return; }
+    }
+
+    const fullPhone = editPhoneNumber.trim() ? `${editDialCode} ${editPhoneNumber.trim()}` : null;
+    const { error: adminErr } = await updateAdminByUserId(editingAdmin.id, {
+      country: editCountry || null,
+      phone_number: fullPhone,
+    });
+    setEditSaving(false);
+    if (adminErr) { setEditError(adminErr); return; }
+
+    setSuccess(`Updated ${editFullName.trim()}'s details.`);
+    setEditingAdmin(null);
+    refetch();
+    refetchAdmins();
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -175,6 +235,7 @@ export default function AdminAdminsPage() {
             onClick={() => {
               setShowForm((v) => !v);
               setSuccess(null);
+              setEditingAdmin(null);
               if (showForm) resetForm();
             }}
             className="flex items-center gap-2"
@@ -294,6 +355,67 @@ export default function AdminAdminsPage() {
         </Card>
       )}
 
+      {editingAdmin && (
+        <Card className="p-6 max-w-2xl mb-6">
+          <p className="text-sm font-semibold text-navy-700 mb-4">
+            Editing {editingAdmin.full_name || editingAdmin.username}
+          </p>
+          <form onSubmit={handleEditSubmit} className="flex flex-col gap-4">
+            <TextInput
+              label="Full name"
+              value={editFullName}
+              onChange={(e) => setEditFullName(e.target.value)}
+              required
+            />
+
+            <SelectInput
+              label="Country"
+              placeholder="Select a country"
+              value={editCountry}
+              onChange={(e) => {
+                const next = e.target.value;
+                setEditCountry(next);
+                const dial = COUNTRY_DIAL_CODES[next];
+                if (dial) setEditDialCode(dial);
+              }}
+              options={COUNTRY_OPTIONS}
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+              <TextInput
+                label="Email"
+                type="email"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                required
+              />
+              <PhoneInput
+                label="Phone number"
+                dialCode={editDialCode}
+                onDialCodeChange={setEditDialCode}
+                phoneNumber={editPhoneNumber}
+                onPhoneNumberChange={setEditPhoneNumber}
+              />
+            </div>
+
+            {editError && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                {editError}
+              </p>
+            )}
+
+            <div className="flex gap-3 mt-2">
+              <Button type="submit" disabled={editSaving}>
+                {editSaving ? "Saving…" : "Save changes"}
+              </Button>
+              <Button type="button" variant="ghost" onClick={cancelEdit}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </Card>
+      )}
+
       <Card className="p-4 mb-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
@@ -326,7 +448,7 @@ export default function AdminAdminsPage() {
 
       <p className="text-xs text-navy-400 mb-2">{filteredAdmins.length} of {admins.length} admins</p>
 
-      <DataTable columns={columns} rows={filteredAdmins} getRowId={(u) => u.id} loading={loading} />
+      <DataTable columns={columns} rows={filteredAdmins} getRowId={(u) => u.id} loading={loading} onEdit={openEdit} />
     </AdminLayout>
   );
 }
