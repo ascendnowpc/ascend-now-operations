@@ -227,7 +227,7 @@ export function StudentsListView({
   }
 
   const columns: ColumnDef<Student>[] = [
-    { header: "ID", accessor: (s) => <span className="font-mono text-xs font-semibold text-sky-500">{s.id}</span> },
+    { header: "ID", accessor: (s) => <span className="font-mono text-xs font-semibold text-sky-500">{s.id}</span>, className: "whitespace-nowrap" },
     { header: "First name", accessor: (s) => s.first_name },
     { header: "Last name", accessor: (s) => s.last_name },
     { header: "Student Email", accessor: (s) => s.email ?? "—" },

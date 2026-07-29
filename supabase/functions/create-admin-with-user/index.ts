@@ -67,7 +67,7 @@ serve(async (req) => {
     );
 
     const body = await req.json();
-    const { username, email, password, first_name, last_name } = body;
+    const { username, email, password, first_name, last_name, country, phone_number } = body;
 
     if (!username || !email || !password || !first_name) {
       return json({ error: "username, email, password, and first_name are required" }, 400);
@@ -94,7 +94,7 @@ serve(async (req) => {
     // 2. Create the admins marker row linked to the new user.
     const { data: admin, error: adminError } = await serviceClient
       .from("admins")
-      .insert({ user_id: userId })
+      .insert({ user_id: userId, country: country || null, phone_number: phone_number || null })
       .select()
       .single();
 
