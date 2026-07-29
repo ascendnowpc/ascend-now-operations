@@ -46,7 +46,15 @@ export function AdminLayout({ children }: { children: ReactNode }) {
       label: "Teachers",
       icon: <IconTeacher />,
       children: [
-        { label: "Teachers", to: "/admin/teachers", icon: <IconTeacher /> },
+        {
+          label: "Teachers",
+          to: "/admin/teachers",
+          icon: <IconTeacher />,
+          // /admin/teachers/new doubles as "add performance coach" via ?pc=1
+          // (see AdminPcsPage/AdminTeacherFormPage) — don't claim it here.
+          isActive: (loc) =>
+            loc.pathname.startsWith("/admin/teachers") && new URLSearchParams(loc.search).get("pc") !== "1",
+        },
         { label: "Teacher Subjects", to: "/admin/teacher-subjects", icon: <IconBook /> },
         { label: "Teacher's Hours", to: "/admin/teacher-hours", icon: <IconBarChart /> },
         { label: "Zoom Invoices", to: "/admin/zoom-invoices", icon: <IconDownload /> },
@@ -56,7 +64,14 @@ export function AdminLayout({ children }: { children: ReactNode }) {
       label: "Performance Coaches",
       icon: <IconTeacher />,
       children: [
-        { label: "PC", to: "/admin/pcs", icon: <IconTeacher /> },
+        {
+          label: "PC",
+          to: "/admin/pcs",
+          icon: <IconTeacher />,
+          isActive: (loc) =>
+            loc.pathname.startsWith("/admin/pcs") ||
+            (loc.pathname === "/admin/teachers/new" && new URLSearchParams(loc.search).get("pc") === "1"),
+        },
         { label: "PC Assignments", to: "/admin/pc-assignments", icon: <IconLink /> },
         { label: "PC's Log", to: "/admin/coordinator-logs", icon: <IconCoordinatorLog /> },
         { label: "PC Renewal Requests", to: "/admin/renewal-requests", icon: <IconBell /> },

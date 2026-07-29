@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation, type Location } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
 export interface NavItem {
@@ -10,6 +10,13 @@ export interface NavItem {
   badge?: number;
   /** When present, the item renders as an expandable group instead of a link. */
   children?: NavItem[];
+  /**
+   * Override the default "pathname starts with `to`" active check. For a
+   * route shared between two sidebar sections via a query param (e.g. the
+   * teacher-creation route doubling as PC creation via ?pc=1), the plain
+   * pathname match can't tell them apart.
+   */
+  isActive?: (location: Pick<Location, "pathname" | "search">) => boolean;
 }
 
 interface DashboardShellProps {
@@ -56,6 +63,23 @@ const leafClasses = (isActive: boolean) =>
   }`;
 
 function NavLeaf({ item, onNavigate }: { item: NavItem; onNavigate: () => void }) {
+  const location = useLocation();
+
+  if (item.isActive) {
+    const active = item.isActive(location);
+    return (
+      <Link to={item.to!} onClick={onNavigate} className={leafClasses(active)}>
+        {item.icon}
+        <span className="flex-1">{item.label}</span>
+        {item.badge != null && item.badge > 0 && (
+          <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold px-1 leading-none">
+            {item.badge > 99 ? "99+" : item.badge}
+          </span>
+        )}
+      </Link>
+    );
+  }
+
   return (
     <NavLink
       to={item.to!}
@@ -75,8 +99,8 @@ function NavLeaf({ item, onNavigate }: { item: NavItem; onNavigate: () => void }
 
 function NavGroup({ item, onNavigate }: { item: NavItem; onNavigate: () => void }) {
   const location = useLocation();
-  const childActive = (item.children ?? []).some(
-    (child) => child.to && location.pathname.startsWith(child.to)
+  const childActive = (item.children ?? []).some((child) =>
+    child.to && (child.isActive ? child.isActive(location) : location.pathname.startsWith(child.to))
   );
   // Auto-expand when landing on one of the group's routes.
   const [open, setOpen] = useState(childActive);
