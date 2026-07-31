@@ -16,6 +16,7 @@ import { useMonthlyReports, isDateInLockedMonth } from "../../hooks/useMonthlyRe
 import { usePcAssignments } from "../../hooks/usePcAssignments";
 import { useCcAssignments } from "../../hooks/useCcAssignments";
 import { loggableStudentIds } from "../../utils/ccAssignment";
+import { coordinatorFieldState, derivedCoordinatorId } from "../../utils/sessionCoordinator";
 import { useProgramTypes } from "../../hooks/useProgramTypes";
 import { useSessionDurationSettings } from "../../hooks/useSessionDurationSettings";
 import { useCourseTypes } from "../../hooks/useCourseTypes";
@@ -286,16 +287,21 @@ export function SessionLogFormView({
   const studentInvolved = !isWorkForAscendType && !isAscendOfflineWork;
 
   const coaches = teachers.filter((t) => t.is_performance_coach && t.is_active);
-  // Scope the coordinator dropdown to the selected student's actual assigned
-  // PC(s) — falls back to every coach when no student is selected yet (e.g.
-  // Work for Ascend Now, and Ascend Offline Work, neither of which has a
-  // student). Ascend Offline Work repurposes this same field as "Assigned
-  // by" (see its label below), but still only ever picks from performance
-  // coaches, same as every other program type.
+  // The coach on a session that involves a student is derived, never chosen —
+  // it's whoever that student is assigned to. Only the student-less program
+  // types (Work for Ascend Now; Ascend Offline Work, which reuses this field
+  // as "Assigned by") still get a picker, since there's no assignment to read
+  // it from. Rules in src/utils/sessionCoordinator.ts (unit-tested).
   const assignedPcId = selectedStudent ? getPcForStudent(selectedStudent.id) : null;
-  const coordinatorOptions = assignedPcId != null
-    ? coaches.filter((t) => t.id === assignedPcId)
-    : coaches;
+  const coordinatorField = coordinatorFieldState({
+    studentInvolved,
+    selectedStudentId: selectedStudent?.id ?? null,
+    assignedPcId,
+  });
+  const coordinatorName = (teacherId: string) => {
+    const t = teachers.find((x) => x.id === teacherId);
+    return t ? `${t.first_name} ${t.last_name ?? ""}`.trim() : teacherId;
+  };
 
   // Academic teacher subjects (for curriculum-first flow) — scoped to the
   // Teacher picked above, mirroring how a teacher sees their own subjects
@@ -510,12 +516,17 @@ export function SessionLogFormView({
     setShowNoShowMenu(false);
   }
 
-  // Default the coordinator to the student's assigned PC once known — only
-  // when nothing's been set yet, so it never clobbers a loaded record's
-  // existing coordinator while editing.
+  // Keep the coach locked to the selected student's assignment. It FOLLOWS
+  // the student rather than only filling a blank field: the old version bailed
+  // out whenever something was already selected, so choosing a coordinator
+  // before a student, or switching students afterwards, left the session filed
+  // against a coach who wasn't the student's. Clearing to "" when there's no
+  // student (or no assignment) is deliberate — a stale id from the previous
+  // student must not survive the switch.
   useEffect(() => {
-    if (assignedPcId != null && !coordinatorId) setCoordinatorId(String(assignedPcId));
-  }, [assignedPcId, coordinatorId]);
+    const next = derivedCoordinatorId({ studentInvolved, assignedPcId });
+    setCoordinatorId((prev) => (prev === next ? prev : next));
+  }, [studentInvolved, assignedPcId]);
 
   useEffect(() => {
     if (!isEditing || !id) return;
@@ -1265,25 +1276,34 @@ export function SessionLogFormView({
             </div>
           </div>}
 
-          {/* Ascend Offline Work repurposes this same field as "Assigned by"
-              — which teacher assigned the work, distinct from "Teacher"
-              above (who performed/logged it) — still scoped to performance
-              coaches only, same as coordinatorOptions everywhere else. */}
-          <SelectInput
-            label={isAscendOfflineWork ? "Assigned by" : "Performance Coach"}
-            placeholder={
-              isAscendOfflineWork
-                ? "Which teacher assigned this offline work?"
-                : role === "admin" ? "Select the coordinator" : "Select your coordinator"
-            }
-            value={coordinatorId}
-            onChange={(e) => setCoordinatorId(e.target.value)}
-            options={coordinatorOptions.map((t) => ({
-              value: String(t.id),
-              label: `${t.first_name} ${t.last_name ?? ""}`.trim(),
-            }))}
-            required
-          />
+          {/* With a student in play the coach is read-only — it's whoever the
+              student is assigned to, and nobody may file a session against a
+              different one. Ascend Offline Work repurposes this same field as
+              "Assigned by" (which teacher assigned the work, distinct from
+              "Teacher" above, who performed it); that type has no student, so
+              it keeps a picker over the coach list. */}
+          {coordinatorField.mode === "derived" ? (
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-navy-600">Performance Coach</label>
+              <div className="rounded-xl border border-navy-100 bg-navy-50/40 px-4 py-2.5 text-sm text-navy-700">
+                {coordinatorField.teacherId
+                  ? coordinatorName(coordinatorField.teacherId)
+                  : <span className="text-navy-400">{coordinatorField.hint}</span>}
+              </div>
+            </div>
+          ) : (
+            <SelectInput
+              label="Assigned by"
+              placeholder="Which teacher assigned this offline work?"
+              value={coordinatorId}
+              onChange={(e) => setCoordinatorId(e.target.value)}
+              options={coaches.map((t) => ({
+                value: String(t.id),
+                label: `${t.first_name} ${t.last_name ?? ""}`.trim(),
+              }))}
+              required
+            />
+          )}
 
           {/* Optional subject note filed straight from the session-log form.
               No separate button — it's saved as part of "Log session" when
