@@ -132,6 +132,9 @@ export default function TeacherProfilePage() {
 
             {!editing ? (
               <dl className="grid grid-cols-2 gap-x-6">
+                {/* Their staff id, same as a coach sees on /teacher/pc-profile
+                    and a student on their own profile page. */}
+                <InfoRow label="ID" value={<span className="font-mono">{teacher.id}</span>} />
                 <InfoRow label="First name" value={teacher.first_name} />
                 <InfoRow label="Last name" value={teacher.last_name} />
                 <InfoRow label="Email" value={teacher.email ?? profile?.email} />

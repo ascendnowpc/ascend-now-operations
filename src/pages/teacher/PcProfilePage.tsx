@@ -113,6 +113,10 @@ function PersonalInfoHeader({
 
         {!editing ? (
           <div className="mt-3 flex flex-col gap-1">
+            {/* The coach's own staff id — the same mnemonic id (e.g. RANW26-3)
+                the admin sees on /admin/pcs/:id, and the counterpart of the
+                "Student ID" a student gets on their own profile page. */}
+            <InfoRow label="ID" value={<span className="font-mono">{teacher.id}</span>} />
             {(teacher.email ?? authEmail) && <InfoRow label="Email" value={teacher.email ?? authEmail} />}
             {teacher.phone_number && <InfoRow label="Phone" value={teacher.phone_number} />}
             {teacher.country && <InfoRow label="Country" value={teacher.country} />}
