@@ -15,6 +15,7 @@ import { fetchSessionLogById, useSessionLogs } from "../../hooks/useSessionLogs"
 import { useMonthlyReports, isDateInLockedMonth } from "../../hooks/useMonthlyReports";
 import { usePcAssignments } from "../../hooks/usePcAssignments";
 import { useCcAssignments } from "../../hooks/useCcAssignments";
+import { loggableStudentIds } from "../../utils/ccAssignment";
 import { useProgramTypes } from "../../hooks/useProgramTypes";
 import { useSessionDurationSettings } from "../../hooks/useSessionDurationSettings";
 import { useCourseTypes } from "../../hooks/useCourseTypes";
@@ -149,19 +150,17 @@ export function SessionLogFormView({
   const backListPath = role === "admin" ? "/admin/session-logs" : "/teacher/sessions";
   const viewPath = (sessionId: string) => role === "admin" ? `/admin/session-logs/${sessionId}` : `/teacher/sessions/${sessionId}`;
 
-  // PCs and CCs may only log/search students assigned to them (teacher role
-  // only — admin can search/pick any student, same as it always could).
-  // Someone carrying both flags gets the union of the two rosters.
-  const assignedStudentIds = role === "teacher" && (isCoach || isCounsellor) && currentTeacher
-    ? new Set([
-        ...(isCoach
-          ? activeAssignments.filter((a) => a.pc_teacher_id === currentTeacher.id).map((a) => a.student_id)
-          : []),
-        ...(isCounsellor
-          ? activeCcAssignments.filter((a) => a.cc_teacher_id === currentTeacher.id).map((a) => a.student_id)
-          : []),
-      ])
-    : undefined;
+  // PCs and CCs may only log/search students assigned to them; admin and
+  // plain teachers can search/pick anyone. Rule lives in
+  // src/utils/ccAssignment.ts so it's unit-testable (ccAssignment.test.ts).
+  const assignedStudentIds = loggableStudentIds({
+    isAdmin: role === "admin",
+    teacherId: currentTeacher?.id ?? null,
+    isCoach,
+    isCounsellor,
+    activePcAssignments: activeAssignments,
+    activeCcAssignments,
+  });
 
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().slice(0, 10));

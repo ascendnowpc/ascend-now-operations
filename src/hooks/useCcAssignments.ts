@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import type { CcAssignmentStatus, CcStudentAssignment } from "../types/database";
+import {
+  activeCcAssignments as filterActive,
+  ccForStudent,
+  isCcAssignmentActive,
+  latestCcForStudent,
+} from "../utils/ccAssignment";
 
 // Same PostgREST max-rows cap as usePcAssignments.ts — this table grows a row
 // per assignment change rather than per student, so paginate rather than
@@ -50,20 +56,19 @@ export function useCcAssignments() {
 
   useEffect(() => { refetch(); }, [refetch]);
 
-  const activeAssignments = assignments.filter((a) => a.unassigned_at === null);
-  const completedAssignments = assignments.filter((a) => a.unassigned_at !== null);
+  // The active/latest/roster rules live in src/utils/ccAssignment.ts so they
+  // can be unit-tested away from Supabase — see ccAssignment.test.ts.
+  const activeAssignments = filterActive(assignments);
+  const completedAssignments = assignments.filter((a) => !isCcAssignmentActive(a));
 
   const assignedStudentIds = new Set(activeAssignments.map((a) => a.student_id));
 
   function getCcForStudent(studentId: string): string | null {
-    return activeAssignments.find((a) => a.student_id === studentId)?.cc_teacher_id ?? null;
+    return ccForStudent(assignments, studentId);
   }
 
-  // The counsellor on the student's most recent assignment, open or closed —
-  // how a completed student still shows up under the CC who saw them through.
-  // `assignments` is ordered assigned_at desc, so the first hit is the latest.
   function getLatestCcForStudent(studentId: string): string | null {
-    return assignments.find((a) => a.student_id === studentId)?.cc_teacher_id ?? null;
+    return latestCcForStudent(assignments, studentId);
   }
 
   async function assignStudent(studentId: string, ccTeacherId: string) {

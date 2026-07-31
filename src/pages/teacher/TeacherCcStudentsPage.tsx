@@ -2,6 +2,7 @@ import { TeacherLayout } from "./TeacherLayout";
 import { StudentsListView } from "../../components/students/StudentsListView";
 import { useCcAssignments } from "../../hooks/useCcAssignments";
 import { useMyTeacherProfile } from "../../hooks/useMyTeacherProfile";
+import { studentIdsForCc } from "../../utils/ccAssignment";
 
 // A College Counsellor's roster. Same shared list the admin and PC pages use,
 // scoped to this counsellor's assignments — including completed ones, so a
@@ -13,9 +14,7 @@ export default function TeacherCcStudentsPage() {
   const { assignments } = useCcAssignments();
   const { teacher } = useMyTeacherProfile();
 
-  const visibleIds = new Set(
-    assignments.filter((a) => a.cc_teacher_id === teacher?.id).map((a) => a.student_id)
-  );
+  const visibleIds = studentIdsForCc(assignments, teacher?.id ?? "");
 
   return (
     <TeacherLayout>
