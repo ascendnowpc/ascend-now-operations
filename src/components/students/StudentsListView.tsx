@@ -64,12 +64,7 @@ export function StudentsListView({
   headerAction?: ReactNode;
   /** Undefined = no restriction (admin sees every student). */
   allowedIds?: Set<string>;
-  /**
-   * Where a row navigates to. Omitted = rows aren't clickable, which is how
-   * the CC list works: a College Counsellor gets the roster, not the full
-   * student record (that view's PC-side links go to coach-only routes).
-   */
-  detailPath?: (studentId: string) => string;
+  detailPath: (studentId: string) => string;
   emptyMessage?: string;
   children?: ReactNode;
   /**
@@ -429,7 +424,7 @@ export function StudentsListView({
         rows={filtered}
         getRowId={(s) => s.id}
         loading={loading}
-        onRowClick={detailPath ? (s) => navigate(detailPath(s.id)) : undefined}
+        onRowClick={(s) => navigate(detailPath(s.id))}
         // The caller's empty message describes an empty roster ("no students
         // assigned to you yet"), which isn't what an empty On pause/Completed
         // tab means — fall back to the table's own wording there.

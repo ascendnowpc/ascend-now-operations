@@ -94,6 +94,15 @@ export function useInactiveTeachers() {
   return { teachers, loading, error, refetch, activateTeacher };
 }
 
+// Drops the cached teachers list so the next `useTeachers()` mount refetches.
+// Needed because creating a teacher/PC/CC goes through the
+// `create-teacher-with-user` edge function, which never touches this cache —
+// without this the /admin/teachers, /admin/pcs and /admin/ccs lists would keep
+// serving a list without the person just added for up to the cache TTL.
+export function invalidateTeachersCache() {
+  invalidateCache(TEACHERS_KEY);
+}
+
 export async function fetchTeacherById(id: string) {
   const { data, error } = await supabase.from("teachers").select("*").eq("id", id).single();
   return { data: data as Teacher | null, error: error?.message ?? null };
