@@ -4,6 +4,18 @@
 
 Don't add explanatory or instructional microcopy to the UI unless it's asked for. No "click a row for its sessions", "tap to expand", "no report needed" style hints — a clickable row should show it's clickable through hover/cursor affordances, not a text label. Section headings and labels should be as short as possible ("By subject", not "By subject · click a row for its sessions"). When in doubt, leave the text out; the user consistently prefers a clean, uncluttered interface over descriptive prose.
 
+## Add unit tests with every feature
+
+Every feature or bug fix must ship with unit tests. Run `npm test` (Vitest, `vitest run`) before you consider a change done — a change that leaves the suite red isn't finished.
+
+**The rules:**
+1. **New feature → new tests.** Whenever you add a feature, extract its decision-making logic into a pure function (normally under `src/utils/`, or `src/lib/` for infrastructure) and add a `*.test.ts` file next to it. Don't leave the rules buried inside a component where they can't be tested.
+2. **Bug fix → regression test.** Write a test that fails on the old behaviour before you fix it, so the bug can't come back silently.
+3. **Test the logic, not the framework.** The suite runs in a plain Node environment (`vitest.config.ts` sets `environment: "node"` and `include: ["src/**/*.test.ts"]`) — no DOM, no network, no Supabase. Test pure functions: label/formatting helpers, date math, scoring and eligibility rules, parsers, reducers. Do not add React-component rendering tests or tests that hit the live database.
+4. **Modules that talk to Supabase or the browser** (`subjectNoteFile.ts`, `homeworkAnswerMedia.ts`, `fetchTeacherPeriodDetail`, the PDF/DOCX builders) are intentionally untested here. When you touch one, pull any pure logic out of it into a testable helper and test that, rather than mocking the whole Supabase client.
+5. **Cover the edges, not just the happy path.** Nulls, empty strings, zero, boundary values, and the legacy/back-compat shapes the comments call out are exactly where these helpers are relied on.
+6. Keep test names descriptive of the *rule* being enforced (`"No Show 1 pays the teacher nothing"`), not of the function's mechanics — the suite doubles as documentation of the business rules.
+
 ## Keep docs in sync with every change
 
 This repo went through a full doc/schema-drift cleanup on 2026-07-01 (README and DB docs were months stale, and two overlapping migration systems had silently diverged from the live database and from each other). Don't let that happen again.
