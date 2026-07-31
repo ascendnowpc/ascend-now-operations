@@ -3,6 +3,8 @@ import { supabase } from "../lib/supabaseClient";
 import type { Student, StudentStatus } from "../types/database";
 import { getCached, setCached, invalidateCachePrefix } from "../lib/cache";
 import { idSeqNumber } from "../utils/entityId";
+import { notificationsForStudentCompletion } from "../utils/assignmentNotifications";
+import { notifyAssignmentChange } from "../lib/assignmentNotifier";
 
 function byIdNum(a: Student, b: Student) {
   return idSeqNumber(a.id) - idSeqNumber(b.id);
@@ -23,12 +25,44 @@ function byIdNum(a: Student, b: Student) {
  * students list.
  */
 export async function setStudentStatus(studentId: string, status: StudentStatus) {
+  // Completing closes the student's live PC and CC assignments inside the RPC,
+  // and both of those people need telling. Read the ids first — once the RPC
+  // has run there's no way to tell an engagement that just ended from one that
+  // ended months ago.
+  const closing = status === "completed" ? await liveAssignmentIds(studentId) : null;
+
   const { data, error } = await supabase.rpc("set_student_status", {
     p_student_id: studentId,
     p_status: status,
   });
-  if (!error) invalidateCachePrefix("students:");
+  if (!error) {
+    invalidateCachePrefix("students:");
+    if (closing) notifyAssignmentChange(notificationsForStudentCompletion(closing));
+  }
   return { data: (data as Student | null) ?? null, error: error?.message ?? null };
+}
+
+// The student's currently-open PC and CC assignment ids, if any. Best-effort:
+// a failed lookup costs a notification, never the status change itself.
+async function liveAssignmentIds(studentId: string) {
+  const [pc, cc] = await Promise.all([
+    supabase
+      .from("pc_student_assignments")
+      .select("id")
+      .eq("student_id", studentId)
+      .is("unassigned_at", null)
+      .maybeSingle(),
+    supabase
+      .from("cc_student_assignments")
+      .select("id")
+      .eq("student_id", studentId)
+      .is("unassigned_at", null)
+      .maybeSingle(),
+  ]);
+  return {
+    pcAssignmentId: (pc.data as { id: number } | null)?.id ?? null,
+    ccAssignmentId: (cc.data as { id: number } | null)?.id ?? null,
+  };
 }
 
 // PostgREST caps any single request at this project's max-rows setting
