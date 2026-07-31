@@ -7,6 +7,12 @@ import {
   isCcAssignmentActive,
   latestCcForStudent,
 } from "../utils/ccAssignment";
+import {
+  notificationsForAssign,
+  notificationsForCcStatusChange,
+  notificationsForRemoval,
+} from "../utils/assignmentNotifications";
+import { notifyAssignmentChange } from "../lib/assignmentNotifier";
 
 // Same PostgREST max-rows cap as usePcAssignments.ts — this table grows a row
 // per assignment change rather than per student, so paginate rather than
@@ -86,7 +92,20 @@ export function useCcAssignments() {
       .insert({ student_id: studentId, cc_teacher_id: ccTeacherId })
       .select()
       .single();
-    if (!error) await refetch();
+    if (!error) {
+      const created = data as CcStudentAssignment;
+      // A reassignment tells both counsellors — the one who lost the student
+      // and the one who gained them (see assignmentNotifications.ts).
+      notifyAssignmentChange(
+        notificationsForAssign({
+          role: "cc",
+          newAssignmentId: created.id,
+          newTeacherId: ccTeacherId,
+          closed: existing ? { assignmentId: existing.id, teacherId: existing.cc_teacher_id } : null,
+        })
+      );
+      await refetch();
+    }
     return { data: data as CcStudentAssignment | null, error: error?.message ?? null };
   }
 
@@ -97,13 +116,19 @@ export function useCcAssignments() {
       p_assignment_id: assignmentId,
       p_status: status,
     });
-    if (!error) await refetch();
+    if (!error) {
+      notifyAssignmentChange(notificationsForCcStatusChange(assignmentId, status));
+      await refetch();
+    }
     return { error: error?.message ?? null };
   }
 
   // Removing an assignment made in error — no history worth keeping, unlike a
   // completed engagement. Admin-only via RLS.
   async function removeAssignment(assignmentId: number) {
+    // Notify BEFORE the delete: notify-assignment-change resolves the student
+    // and counsellor from the row, which is about to stop existing.
+    notifyAssignmentChange(notificationsForRemoval("cc", assignmentId));
     const { error } = await supabase
       .from("cc_student_assignments")
       .delete()

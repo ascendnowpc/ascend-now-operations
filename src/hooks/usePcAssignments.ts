@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import type { PcStudentAssignment } from "../types/database";
+import { notificationsForAssign, notificationsForRemoval } from "../utils/assignmentNotifications";
+import { notifyAssignmentChange } from "../lib/assignmentNotifier";
 
 // PostgREST caps any single request at this project's max-rows setting
 // (1000) regardless of table size — this table accumulates a row per
@@ -76,7 +78,20 @@ export function usePcAssignments() {
       .insert({ student_id: studentId, pc_teacher_id: pcTeacherId })
       .select()
       .single();
-    if (!error) await refetch();
+    if (!error) {
+      const created = data as PcStudentAssignment;
+      // A reassignment tells both coaches — the one who lost the student and
+      // the one who gained them (see assignmentNotifications.ts).
+      notifyAssignmentChange(
+        notificationsForAssign({
+          role: "pc",
+          newAssignmentId: created.id,
+          newTeacherId: pcTeacherId,
+          closed: existing ? { assignmentId: existing.id, teacherId: existing.pc_teacher_id } : null,
+        })
+      );
+      await refetch();
+    }
     return { data: data as PcStudentAssignment | null, error: error?.message ?? null };
   }
 
@@ -87,7 +102,10 @@ export function usePcAssignments() {
       .from("pc_student_assignments")
       .update({ unassigned_at: new Date().toISOString() })
       .eq("id", existing.id);
-    if (!error) await refetch();
+    if (!error) {
+      notifyAssignmentChange(notificationsForRemoval("pc", existing.id));
+      await refetch();
+    }
     return { error: error?.message ?? null };
   }
 
