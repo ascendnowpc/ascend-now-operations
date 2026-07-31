@@ -7,6 +7,8 @@ import PublicPaymentPage from "./pages/PublicPaymentPage";
 
 import AdminOverviewPage from "./pages/admin/AdminOverviewPage";
 import AdminPcsPage from "./pages/admin/AdminPcsPage";
+import AdminCcsPage from "./pages/admin/AdminCcsPage";
+import AdminCcAssignmentsPage from "./pages/admin/AdminCcAssignmentsPage";
 import AdminPcDetailPage from "./pages/admin/AdminPcDetailPage";
 import AdminUsersPage from "./pages/admin/AdminUsersPage";
 import AdminAdminsPage from "./pages/admin/AdminAdminsPage";
@@ -47,6 +49,7 @@ import TeacherHomeworkReviewPage from "./pages/teacher/TeacherHomeworkReviewPage
 import TeacherWholePaperReviewPage from "./pages/teacher/TeacherWholePaperReviewPage";
 import TeacherQuestionPhotoReviewPage from "./pages/teacher/TeacherQuestionPhotoReviewPage";
 import TeacherStudentsPage from "./pages/teacher/TeacherStudentsPage";
+import TeacherCcStudentsPage from "./pages/teacher/TeacherCcStudentsPage";
 import TeacherStudentDetailPage from "./pages/teacher/TeacherStudentDetailPage";
 import TeacherHoursPage from "./pages/teacher/TeacherHoursPage";
 import TeacherInvoicesPage from "./pages/teacher/TeacherInvoicesPage";
@@ -135,6 +138,22 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <AdminPcDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/ccs"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminCcsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/cc-assignments"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminCcAssignmentsPage />
               </ProtectedRoute>
             }
           />
@@ -358,7 +377,7 @@ export default function App() {
               // Performance coaches use the merged /teacher/pc-profile
               // instead (personal info + username/password + their public
               // profile all in one place).
-              <ProtectedRoute allowedRoles={["teacher"]}>
+              <ProtectedRoute allowedRoles={["teacher", "college_counselor"]}>
                 <TeacherProfilePage />
               </ProtectedRoute>
             }
@@ -382,7 +401,7 @@ export default function App() {
           <Route
             path="/teacher/sessions"
             element={
-              <ProtectedRoute allowedRoles={["teacher", "performance_coach"]}>
+              <ProtectedRoute allowedRoles={["teacher", "performance_coach", "college_counselor"]}>
                 <TeacherSessionsPage />
               </ProtectedRoute>
             }
@@ -390,7 +409,7 @@ export default function App() {
           <Route
             path="/teacher/sessions/new"
             element={
-              <ProtectedRoute allowedRoles={["teacher", "performance_coach"]}>
+              <ProtectedRoute allowedRoles={["teacher", "performance_coach", "college_counselor"]}>
                 <TeacherSessionFormPage />
               </ProtectedRoute>
             }
@@ -398,7 +417,7 @@ export default function App() {
           <Route
             path="/teacher/sessions/:id"
             element={
-              <ProtectedRoute allowedRoles={["teacher", "performance_coach"]}>
+              <ProtectedRoute allowedRoles={["teacher", "performance_coach", "college_counselor"]}>
                 <TeacherSessionViewPage />
               </ProtectedRoute>
             }
@@ -406,7 +425,7 @@ export default function App() {
           <Route
             path="/teacher/sessions/:id/edit"
             element={
-              <ProtectedRoute allowedRoles={["teacher", "performance_coach"]}>
+              <ProtectedRoute allowedRoles={["teacher", "performance_coach", "college_counselor"]}>
                 <TeacherSessionFormPage />
               </ProtectedRoute>
             }
@@ -464,6 +483,17 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["performance_coach"]}>
                 <TeacherStudentsPage />
+              </ProtectedRoute>
+            }
+          />
+          {/* A College Counsellor's roster. Separate from /teacher/students
+              (the PC roster) because the two are different assignment tables
+              and a counsellor doesn't get the coach's student-detail view. */}
+          <Route
+            path="/teacher/cc-students"
+            element={
+              <ProtectedRoute allowedRoles={["college_counselor"]}>
+                <TeacherCcStudentsPage />
               </ProtectedRoute>
             }
           />

@@ -38,7 +38,7 @@ function exportCsv(
     const parts = [cur, group, subLabel].filter(Boolean);
     return parts.join(" | ");
   }
-  const headers = ["First Name", "Last Name", "Username", "Email", "Phone", "Country", "Performance Coach", "Active", "Subjects"];
+  const headers = ["First Name", "Last Name", "Username", "Email", "Phone", "Country", "Performance Coach", "College Counsellor", "Active", "Subjects"];
   const rows = teachers.map((t) => [
     t.first_name,
     t.last_name ?? "",
@@ -47,6 +47,7 @@ function exportCsv(
     t.phone_number ?? "",
     t.country ?? "",
     t.is_performance_coach ? "Yes" : "No",
+    t.is_college_counselor ? "Yes" : "No",
     t.is_active ? "Active" : "Inactive",
     (t.teacher_subjects ?? []).map((s) => subjectLabel(s.subject_id, s.curriculum_id ?? null)).join("\n"),
   ]);
@@ -71,10 +72,13 @@ export default function AdminTeachersPage() {
   // Ordered by ID rather than the hook's default name sort (the shared
   // useTeachers order stays alphabetical for the coach dropdowns elsewhere).
   const byId = (a: TeacherWithSubjects, b: TeacherWithSubjects) => idSeqNumber(a.id) - idSeqNumber(b.id);
-  // Teachers only — performance coaches are listed under their own PC page
-  // (/admin/pcs). A PC is a teacher with is_performance_coach = true.
-  const activeTeachers = mergeWithSubjects(rawTeachers.filter((t) => t.is_active && !t.is_performance_coach), subjectsByTeacher).sort(byId);
-  const inactiveTeachers = mergeWithSubjects(inactiveRaw.filter((t) => !t.is_performance_coach), subjectsByTeacher).sort(byId);
+  // Teachers only — performance coaches and college counsellors are listed
+  // under their own pages (/admin/pcs, /admin/ccs), identified by the
+  // is_performance_coach / is_college_counselor flags.
+  const isRoleTeacher = (t: { is_performance_coach: boolean; is_college_counselor: boolean }) =>
+    !t.is_performance_coach && !t.is_college_counselor;
+  const activeTeachers = mergeWithSubjects(rawTeachers.filter((t) => t.is_active && isRoleTeacher(t)), subjectsByTeacher).sort(byId);
+  const inactiveTeachers = mergeWithSubjects(inactiveRaw.filter(isRoleTeacher), subjectsByTeacher).sort(byId);
   const curriculumLookup = new Map(curricula.map((c) => [c.id, c.name]));
   const allTeacherSubjectsFlat = Array.from(subjectsByTeacher.values()).flat();
 

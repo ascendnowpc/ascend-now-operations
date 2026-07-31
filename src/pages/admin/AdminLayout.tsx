@@ -51,9 +51,16 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           to: "/admin/teachers",
           icon: <IconTeacher />,
           // /admin/teachers/new doubles as "add performance coach" via ?pc=1
-          // (see AdminPcsPage/AdminTeacherFormPage) — don't claim it here.
-          isActive: (loc) =>
-            loc.pathname.startsWith("/admin/teachers") && new URLSearchParams(loc.search).get("pc") !== "1",
+          // and "add college counsellor" via ?cc=1 (see AdminPcsPage /
+          // AdminCcsPage / AdminTeacherFormPage) — don't claim either here.
+          isActive: (loc) => {
+            const params = new URLSearchParams(loc.search);
+            return (
+              loc.pathname.startsWith("/admin/teachers") &&
+              params.get("pc") !== "1" &&
+              params.get("cc") !== "1"
+            );
+          },
         },
         { label: "Teacher Subjects", to: "/admin/teacher-subjects", icon: <IconBook /> },
         { label: "Teacher's Hours", to: "/admin/teacher-hours", icon: <IconBarChart /> },
@@ -75,6 +82,24 @@ export function AdminLayout({ children }: { children: ReactNode }) {
         { label: "PC Assignments", to: "/admin/pc-assignments", icon: <IconLink /> },
         { label: "PC's Log", to: "/admin/coordinator-logs", icon: <IconCoordinatorLog /> },
         { label: "PC Renewal Requests", to: "/admin/renewal-requests", icon: <IconBell /> },
+      ],
+    },
+    {
+      label: "College Counsellors",
+      icon: <IconTeacher />,
+      children: [
+        {
+          label: "CC",
+          to: "/admin/ccs",
+          icon: <IconTeacher />,
+          // /admin/teachers/new doubles as "add college counsellor" via ?cc=1,
+          // the same way ?pc=1 works above — claim it here so the nav
+          // highlights this section rather than Teachers.
+          isActive: (loc) =>
+            loc.pathname.startsWith("/admin/ccs") ||
+            (loc.pathname === "/admin/teachers/new" && new URLSearchParams(loc.search).get("cc") === "1"),
+        },
+        { label: "CC Assignments", to: "/admin/cc-assignments", icon: <IconLink /> },
       ],
     },
     { label: "Reports", to: "/admin/reports", icon: <IconBarChart /> },

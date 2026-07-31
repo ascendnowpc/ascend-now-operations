@@ -32,16 +32,17 @@ cd scripts && node create-admin.mjs
 # scripts/promote-user-to-admin.sql
 ```
 
-## Tables at a glance (46 total — see `docs/VERIFIED_DATABASE_STATE.md` for full detail)
+## Tables at a glance (47 total — see `docs/VERIFIED_DATABASE_STATE.md` for full detail)
 
 | Table | Purpose |
 |---|---|
 | `users` | Central identity, 1-to-1 with `auth.users`. Never stores a password. |
-| `teachers` | Teacher profiles. A performance coach = a teacher with `is_performance_coach = true`. |
+| `teachers` | Teacher profiles. A performance coach = a teacher with `is_performance_coach = true`; a college counsellor = one with `is_college_counselor = true` (added 2026-07-31). A teacher can be both. |
 | `teacher_subjects` | Junction table — one row per (teacher, subject, curriculum). |
 | `admins` | Minimal — access comes from `users.role = 'admin'`, not from anything stored here. |
 | `students` | Structured student records (superseded free-text names in `session_logs`). `user_id` links a student login. As of 2026-07-07 there is no separate parent role/table — the guardian's name and phone (`parent_full_name`/`parent_phone_number`) are plain fields on this row, alongside `notification_email` ("send updates to" — may differ from the login `email`), `curriculum`, and an optional `report_card_url`. |
 | `pc_student_assignments` | Which performance coach is assigned to which student. |
+| `cc_student_assignments` | Which college counsellor is (or was) assigned to which student (added 2026-07-31). Unlike the PC table it carries its own `active`/`completed` status — a counselling engagement ends while the student carries on. Completing closes the row rather than deleting it, so session logs written during it stay attributable. |
 | `program_types` | Hierarchical (via `parent_id`) lookup for the session-logging dropdown. |
 | `course_types` | Package/invoice-facing course categories. |
 | `subject_categories`, `curricula`, `curriculum_groups`, `subjects` | Subject catalogue hierarchy. |

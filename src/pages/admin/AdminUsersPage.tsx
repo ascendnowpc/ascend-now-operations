@@ -15,6 +15,7 @@ const ROLE_OPTIONS: { value: UserRole | ""; label: string }[] = [
   { value: "admin", label: "Admin" },
   { value: "teacher", label: "Teacher" },
   { value: "performance_coach", label: "Performance Coach" },
+  { value: "college_counselor", label: "College Counsellor" },
   { value: "student", label: "Student" },
 ];
 
@@ -41,6 +42,7 @@ export default function AdminUsersPage() {
   const { users, loading } = useUsers();
   const { teachers } = useTeachers();
   const pcUserIds = new Set(teachers.filter((t) => t.is_performance_coach && t.user_id).map((t) => t.user_id!));
+  const ccUserIds = new Set(teachers.filter((t) => t.is_college_counselor && t.user_id).map((t) => t.user_id!));
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState<UserRole | "">("");
   const [filterActive, setFilterActive] = useState<"" | "active" | "inactive">("");
@@ -60,10 +62,13 @@ export default function AdminUsersPage() {
     {
       header: "Role",
       accessor: (u) => {
+        // The teachers flag wins over users.role, which can only carry one
+        // of the two for someone who is both — PC first, same as elsewhere.
         const isPC = pcUserIds.has(u.id) || u.role === "performance_coach";
+        const isCC = ccUserIds.has(u.id) || u.role === "college_counselor";
         return (
           <span className="text-sm text-navy-700 capitalize">
-            {isPC ? "Performance Coach" : u.role.replace("_", " ")}
+            {isPC ? "Performance Coach" : isCC ? "College Counsellor" : u.role.replace("_", " ")}
           </span>
         );
       },

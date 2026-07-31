@@ -10,7 +10,10 @@ export function TeacherLayout({ children }: { children: ReactNode }) {
   const { profile } = useAuth();
   const { teacher, loading, updateMyProfile } = useMyTeacherProfile();
   const isCoach = profile?.role === "performance_coach" || teacher?.is_performance_coach === true;
-  const roleLabel = isCoach ? "Performance Coach" : "Teacher";
+  const isCounsellor = profile?.role === "college_counselor" || teacher?.is_college_counselor === true;
+  // A teacher may carry both flags even though users.role holds only one; PC
+  // is the richer panel, so it wins the sidebar label.
+  const roleLabel = isCoach ? "Performance Coach" : isCounsellor ? "College Counsellor" : "Teacher";
 
   // Mandatory first-login gate — admin never requires last name/email/phone/
   // country at add time (only first name is), so this is where they actually
@@ -31,6 +34,15 @@ export function TeacherLayout({ children }: { children: ReactNode }) {
     { label: "Notes", to: "/teacher/notes", icon: <IconNote /> },
   ];
 
+  // College Counselling is a narrow role: log sessions for the students
+  // assigned to you, and see who those are. Nothing else — no coordinator
+  // log, no renewal requests, no homework generator.
+  const ccNavSection: NavItem = {
+    label: "College Counsellor",
+    icon: <IconTeacher />,
+    children: [{ label: "My Students", to: "/teacher/cc-students", icon: <IconUsers /> }],
+  };
+
   const teacherNavItems: NavItem[] = isCoach
     ? [
         // Sectioned like the admin sidebar: shared tabs in one group, the
@@ -46,11 +58,20 @@ export function TeacherLayout({ children }: { children: ReactNode }) {
             { label: "Renewal Requests", to: "/teacher/renewal-requests", icon: <IconBell /> },
           ],
         },
+        // Someone flagged as both gets the CC roster as an extra section —
+        // users.role can only be one of the two, so the flags decide.
+        ...(isCounsellor ? [ccNavSection] : []),
         // "My Profile" for a coach covers their own account settings
         // (username/password, personal info) AND the public profile card
         // their assigned students see — merged from a separate "Coach
         // Profile" tab 2026-07-24, see PcProfilePage.tsx.
         { label: "My Profile", to: "/teacher/pc-profile", icon: <IconUser /> },
+      ]
+    : isCounsellor
+    ? [
+        { label: "Session Logging", to: "/teacher/sessions", icon: <IconClipboard /> },
+        { label: "My Students", to: "/teacher/cc-students", icon: <IconUsers /> },
+        { label: "My Profile", to: "/teacher/profile", icon: <IconUser /> },
       ]
     : [
         ...sharedNavItems,

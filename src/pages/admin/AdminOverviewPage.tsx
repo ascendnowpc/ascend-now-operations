@@ -107,6 +107,19 @@ const GROUPS: OverviewGroup[] = [
     ],
   },
   {
+    key: "ccs",
+    title: "College Counsellors",
+    icon: <IconTeacher />,
+    iconChip: "bg-violet-100 text-violet-700",
+    openTile: "border-violet-400 bg-violet-50/40",
+    hoverTile: "hover:border-violet-300 hover:bg-violet-50/40",
+    ring: "focus:ring-violet-300",
+    links: [
+      { label: "CC", to: "/admin/ccs", description: "College counsellors only.", icon: <IconTeacher /> },
+      { label: "CC Assignments", to: "/admin/cc-assignments", description: "Assign counsellors to students.", icon: <IconLink /> },
+    ],
+  },
+  {
     key: "configuration",
     title: "Configuration",
     icon: <IconSettings />,

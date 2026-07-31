@@ -57,7 +57,11 @@ export function ProtectedRoute({ allowedRoles, children }: ProtectedRouteProps) 
 
   if (!allowedRoles.includes(profile.role)) {
     if (profile.role === "admin") return <Navigate to="/admin" replace />;
-    if (profile.role === "teacher" || profile.role === "performance_coach") {
+    if (
+      profile.role === "teacher" ||
+      profile.role === "performance_coach" ||
+      profile.role === "college_counselor"
+    ) {
       return <Navigate to="/teacher" replace />;
     }
     if (profile.role === "student") return <Navigate to="/student" replace />;

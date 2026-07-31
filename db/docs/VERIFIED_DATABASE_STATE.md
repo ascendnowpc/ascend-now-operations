@@ -2,6 +2,16 @@
 
 **Generated 2026-07-01 by direct introspection of the live Supabase project (`ascend-now`, ref `uqyuczvckqxgtilpzarh`, org `ascend-now`) via the Supabase MCP connection — every table, column, constraint, policy, function, and trigger below was read straight from the running Postgres instance, not from the migration files or any prior doc.**
 
+**Updated 2026-07-31 (new College Counsellor role — `is_college_counselor` flag, `cc_student_assignments`, and a `college_counselor` login role).** Applied via `supabase/migrations/20260806000000_college_counselor_role_enum.sql` + `20260806000100_cc_student_assignments.sql`, verified live. A CC is a `teachers` row flagged **`is_college_counselor`**, exactly the way a performance coach is one flagged `is_performance_coach`; students are assigned through the new **`cc_student_assignments`** table, managed by an admin at `/admin/cc-assignments`. A student who has a PC may *also* have a CC — the two assignment tables are independent, and having a PC remains the norm while a CC is optional.
+
+The structural difference between the two roles is durability, and it is the whole reason CC assignments carry a status when PC assignments don't. A PC assignment is permanent for the life of the engagement, so its state lives on `students.status` (see the 2026-07-29 entry below). A CC engagement is a finite piece of work that ends while the student carries on with everything else, so **`cc_student_assignments.status`** (`active` / `completed`, deliberately **no** `paused`) sits on the assignment row. Completing sets `unassigned_at` and **never deletes the row** — session logs written during the engagement stay exactly where they are, and the closed row is what still attributes them to the counsellor who wrote them. Completing the *student* (`set_student_status(..., 'completed')`) now closes any live CC engagement too, alongside the PC one it already closed.
+
+Two new functions: **`is_college_counselor()`** (keyed off the `teachers` flag rather than `users.role`, so a teacher who is both a PC and a CC — `users.role` can only carry one of the two — still gets CC access) and **`set_cc_assignment_status()`** (SECURITY DEFINER; admin or the assigned counsellor; complete/reopen). RLS on `cc_student_assignments` mirrors `pc_student_assignments` including its admin-only write rule: a counsellor cannot assign themselves a student. A CC's only extra read grant is `CCs can read sessions for assigned students` on `session_logs`; logging a session needs no new policy, since a counsellor writes as a teacher and the existing `teacher_id = my_teacher_id()` INSERT policy already covers that.
+
+**Verified live by impersonation** (two rolled-back transactions, live data untouched — `cc_student_assignments` confirmed back to 0 rows afterwards): a counsellor was blocked from self-assigning (`42501`); an admin assigned successfully; a second *active* CC for the same student was rejected by `uq_active_cc_per_student`; the counsellor completed their own engagement (status `completed`, `unassigned_at` set) and an admin reopened it (`unassigned_at` back to NULL); completing the student closed both the CC and the PC assignment; and a session log the counsellor wrote for an assigned student was inserted, read back, and still readable to both the counsellor and an admin after the engagement completed, with the closed assignment row still present.
+
+**Frontend:** new admin section **College Counsellors** (`/admin/ccs`, `/admin/cc-assignments`), a CC roster at `/teacher/cc-students`, and a CC sidebar limited to Session Logging + My Students + My Profile. `create-teacher-with-user` redeployed (**v12**) to accept `is_college_counselor` and pick the login role accordingly.
+
 **Updated 2026-07-29 (Ruchi Steven's and Miriam Hanna's performance-coach profile cards filled in and published; data-only, no schema change).** Applied via `supabase/migrations/20260805000100_seed_ruchi_miriam_pc_profiles.sql`, verified live. Both had empty unpublished `pc_profiles` rows from `20260804000100`; the client supplied their finished cards, so each row now carries department `Management`, the "Hi there!" intro, 2 `achievements`, 4 `coach_responsibilities` timeline entries, education entries (Ruchi 1, Miriam 3) and contact details, with `is_published = true`. **3 of 5 coach profiles are now published** (Rana, Ruchi, Miriam); Michel Sherif and Ana Isabel Galvan remain empty and unpublished. Ruchi's two achievements are single-figure IB DP predictions — `score_before` is empty and `score_scale` stores the whole trailing string `"45 (Predicted)"`, which `PcProfileCard` renders as `44/45 (Predicted)` via its no-`score_before` branch. Institution logos again point at assets shipped in `public/` and served at the site root (`stanford.avif`, `lse.jpg` for Ruchi; `worldacademy.png`, `jis.png`, `nyu.png` for Miriam), for the same reason given in Rana's entry below. The same two deliberate gaps apply to both: `photo_url` is **NULL** (a headshot can only be uploaded to the public `pc-profiles` bucket through the UI, so the cards fall back to initials) and `educator_experience` is left **empty** because that section was removed from the feature — `PcProfileCard` never renders it and `PcProfileEditor` hardcodes `educator_experience: []` on every save. Note that Miriam's supplied card repeats Rana's two achievements and four responsibilities verbatim; that is what the client provided and it is stored as given rather than reworded.
 
 **Updated 2026-07-29 (students now have an Active / On pause / Completed status, and completing one unassigns them).** Applied via `supabase/migrations/20260805000000_student_status_categories.sql`, verified live. `students` gains **`status`** (NOT NULL, default `'active'`, CHECK ∈ `{active, paused, completed}`, indexed) and **`status_changed_at`**. Both a performance coach and an admin can move a student between the three categories; the admin and coach student lists (`/admin/students`, `/teacher/students`, plus the assigned-students lists on `/admin/pc-assignments` and `/admin/pcs/:id`) group by it.
@@ -354,6 +364,7 @@ Also relocated both admin-editable no-show constants into one place: a new **Set
 | `admins` | 1 | Minimal admin marker row — the bootstrap admin `admin@123` (id 1) |
 | `students` | 1 | Student records (structured — superseded the old free-text name fields). Emptied by the 2026-07-27 purge, then `S1` (Batu Ozcelik) seeded 2026-07-28; the earlier 2026-07-07 student/parent-merge purge and the removal of the `parents` table still stand. The former parent's info lives as plain fields on the student row when any exist |
 | `pc_student_assignments` | 1 | Which performance coach is assigned to which student — Rana Walid → `S1` (seeded 2026-07-28) |
+| `cc_student_assignments` | 0 | Which college counsellor is (or was) assigned to which student, with its own `active`/`completed` status (added 2026-07-31) |
 | `program_types` | 10 | Top-level "type of program" dropdown, now hierarchical via `parent_id` (updated 2026-07-02 — see Seed Data below) |
 | `course_types` | 6 | Package/invoice-facing course categories — Academic, Beyond Academic, and (as of 2026-07-02) College Counselling are active; Edge, General, Foundation Program are not |
 | `subject_categories` | 7 | Only 1 active row now (`Academic`) — Beyond Academic subjects no longer use this table for grouping at all (see below); College Support deactivated 2026-07-02 (superseded by the College Counselling program/course type); Passion Projects/Career Exploration deactivated 2026-07-02 and re-created as plain `subjects` rows instead |
@@ -415,6 +426,7 @@ No password column anywhere — Supabase Auth (`auth.users`) owns all password h
 | updated_at | timestamptz | NO | now() |
 | user_id | uuid → `users.id` | YES | — |
 | is_performance_coach | boolean | NO | false |
+| is_college_counselor | boolean | NO | false — added 2026-07-31; independent of `is_performance_coach`, a teacher may carry both |
 | is_active | boolean | NO | true |
 
 ### `teacher_subjects`
@@ -488,6 +500,25 @@ Write RLS (as of 2026-07-18 — assignment is now fully admin-only):
 - **`INSERT` — admin only.** There is deliberately **no** PC INSERT policy. The old `pc_assign_unassigned_student_to_self` (a PC self-assigning an unassigned student) was dropped 2026-07-18 (`20260801000300_pc_cannot_self_assign_students.sql`) along with the UI's "+ Assign student" flow on `/teacher/students` — a performance coach can no longer assign a student to themselves at all. Only an admin can, via `admin_all_pc_assignments`. (The `student_has_active_pc()` SECURITY DEFINER helper that policy used still exists but is now unused by any policy.)
 - **`UPDATE` — admin only.** There is deliberately **no** PC UPDATE policy (the old `pc_unassign_own_students` was dropped 2026-07-06): a performance coach cannot unassign/remove a student from themselves. Only an admin can, via `admin_all_pc_assignments`.
 - **`ALL` — `admin_all_pc_assignments`** (`is_admin()`): admins can do anything — assigning, unassigning, and reassigning students between coaches (the `/admin/pc-assignments` flow).
+
+### `cc_student_assignments` (added 2026-07-31)
+| Column | Type | Nullable | Default |
+|---|---|---|---|
+| id | bigint (identity) | NO | — |
+| student_id | text → `students.id` | NO | — |
+| cc_teacher_id | text → `teachers.id` | NO | — |
+| status | text | NO | `'active'` — CHECK ∈ `{active, completed}` (no `paused`, by decision) |
+| assigned_at | timestamptz | NO | now() |
+| unassigned_at | timestamptz | YES | — set when the engagement completes |
+| status_changed_at | timestamptz | YES | — |
+
+Unique index `uq_active_cc_per_student` on `student_id` **where `unassigned_at IS NULL`** — one *active* counsellor per student, full history kept. `idx_cc_assignments_teacher` on `cc_teacher_id`.
+
+Structurally the mirror of `pc_student_assignments`, with one deliberate difference: the `status` column. A PC assignment has no status of its own because its lifecycle *is* the student's (`students.status`); a CC engagement ends independently, so the state has to live here. Completing writes `status = 'completed'` **and** `unassigned_at` together via `set_cc_assignment_status()` — the row is never deleted, so session logs written during the engagement remain attributable to that counsellor and the student simply moves to the counsellor's Completed list.
+
+RLS mirrors `pc_student_assignments` policy for policy:
+- **`SELECT`** — `cc_read_own_assignments` (a counsellor's own rows), `student_parent_read_cc_assignments` (a student's own), `teachers_read_active_cc_assignments` (any teacher, `unassigned_at IS NULL` only).
+- **`INSERT` / `UPDATE` — admin only**, via `admin_all_cc_assignments`. There is deliberately **no** counsellor write policy, the same rule as PCs since `20260801000300` — a CC cannot assign themselves a student. Status changes go through `set_cc_assignment_status()` instead, which is why no UPDATE policy is needed for the one write a counsellor *is* allowed.
 
 ### `pc_profiles` (added 2026-07-18)
 | Column | Type | Nullable | Default |
@@ -925,7 +956,7 @@ CHECK `subject_notes_has_content`: `note_text is not null or file_url is not nul
 
 ## Enum Types
 
-**`user_role`**: `teacher`, `student`, `performance_coach`, `admin` — `parent` was removed 2026-07-07 (the enum was dropped and recreated without it, see the changelog entry near the top) now that a student's dashboard covers everything a parent's used to, with no separate parent login.
+**`user_role`**: `teacher`, `student`, `performance_coach`, `college_counselor` (added 2026-07-31), `admin` — `parent` was removed 2026-07-07 (the enum was dropped and recreated without it, see the changelog entry near the top) now that a student's dashboard covers everything a parent's used to, with no separate parent login.
 **`engagement_rating`**: `low`, `medium`, `high`
 
 ---
@@ -966,6 +997,7 @@ CHECK `subject_notes_has_content`: `note_text is not null or file_url is not nul
 - `teacher_subjects`: `(teacher_id, subject_id, curriculum_id)` where curriculum set; `(teacher_id, subject_id)` where curriculum null
 - `subjects`: `(name, category_id)` where `curriculum_group_id IS NULL`
 - `pc_student_assignments`: `student_id` where `unassigned_at IS NULL` (one active coach per student)
+- `cc_student_assignments`: `student_id` where `unassigned_at IS NULL` (one active counsellor per student)
 - `students`: `user_id` where `user_id IS NOT NULL`
 - `student_packages`: `(student_id, course_type_id)` where `NOT is_locked` (partial index, replaces the old plain unique constraint as of 2026-07-02 — see package-locking notes above)
 - `invoice_packages`: `(invoice_id, student_package_id)`
@@ -988,6 +1020,15 @@ select exists (select 1 from public.users where id = auth.uid() and role = 'admi
 ```sql
 select exists (select 1 from public.users where id = auth.uid() and role = 'performance_coach')
 ```
+
+### `is_college_counselor()` → boolean, SECURITY DEFINER, `SET search_path = 'public'` (added 2026-07-31)
+```sql
+select exists (
+  select 1 from public.teachers
+  where user_id = auth.uid() and is_college_counselor and is_active
+);
+```
+Note this reads the **`teachers` flag**, not `users.role`, which is the one place it deliberately departs from `is_performance_coach()`. `users.role` holds a single login role, so a teacher who is both a PC and a CC could only ever carry one of them there; keying off the flag means the CC grants still apply to that person.
 
 ### `can_view_student(p_student_id text)` → boolean, SECURITY DEFINER, `SET search_path = 'public'` (parent branch removed 2026-07-07)
 ```sql
@@ -1013,9 +1054,14 @@ select exists (
 Added 2026-07-06. Was used in the `pc_assign_unassigned_student_to_self` INSERT WITH CHECK to answer "does this student already have an active coach?" **from within a policy on `pc_student_assignments` itself** — being SECURITY DEFINER (and the table not being FORCE RLS) means it reads the table without re-applying that policy, which avoided the `infinite recursion detected in policy` error the previous inline subquery caused. As of 2026-07-18 that INSERT policy was dropped (PCs can no longer self-assign — see `pc_student_assignments`), so this helper is currently **unused** by any policy; it's kept in place (harmless, `EXECUTE` still granted to `authenticated`) in case coach self-assignment is ever reintroduced.
 
 ### `set_student_status(p_student_id text, p_status text)` → `students`, SECURITY DEFINER, `SET search_path = 'public'` (added 2026-07-29)
-Moves a student between the three engagement categories (`active` / `paused` / `completed`) and, when completing, **closes their active `pc_student_assignments` row in the same call**. Raises `check_violation` on any other status value, and `insufficient_privilege` unless the caller is an admin **or** a performance coach with a currently-active assignment for that student.
+Moves a student between the three engagement categories (`active` / `paused` / `completed`) and, when completing, **closes their active `pc_student_assignments` row in the same call** — and, as of 2026-07-31, their active `cc_student_assignments` row too (set to `completed` with `unassigned_at`), since a student who is done is done with their counsellor as well. Raises `check_violation` on any other status value, and `insufficient_privilege` unless the caller is an admin **or** a performance coach with a currently-active assignment for that student.
 
 It exists as a function rather than an RLS policy for two reasons, both structural: (1) RLS is row-level, so there is no way to write a policy that lets a coach update `students.status` and nothing else; (2) completing must also write `pc_student_assignments`, where a coach has **no** write policy at all (assign/unassign stayed admin-only — see `20260706000000` / `20260801000300`), and doing both writes here keeps that rule intact and the pair atomic. A coach therefore cannot re-open a student they completed — completing unassigned them — and an admin re-assigns from `/admin/pc-assignments` (the UI flips such a student back to `active` on re-assignment). `EXECUTE` granted to `authenticated`. Verified live by impersonation: an anonymous caller and a coach-without-assignment were both rejected, an admin and the student's own coach both succeeded, and completing closed the assignment row.
+
+### `set_cc_assignment_status(p_assignment_id bigint, p_status text)` → `cc_student_assignments`, SECURITY DEFINER, `SET search_path = 'public'` (added 2026-07-31)
+Moves a CC engagement between `active` and `completed`. Completing sets `status` **and** `unassigned_at` in the same call; reopening clears `unassigned_at` and first checks the student hasn't since been given another counsellor, raising `unique_violation` with a readable message rather than letting `uq_active_cc_per_student` surface a raw constraint error. Raises `check_violation` on any other status value, `no_data_found` for an unknown id, and `insufficient_privilege` unless the caller is an admin **or** the counsellor named on the row.
+
+Same reasoning as `set_student_status()` for being a function rather than a policy: the status and `unassigned_at` writes must not be separable, or a counsellor could mark themselves complete while staying assigned (or the reverse). It is also why `cc_student_assignments` needs no counsellor `UPDATE` policy at all.
 
 ### `prevent_non_admin_student_relink()` → trigger, SECURITY DEFINER, `SET search_path = 'public'` (added 2026-07-06; `parent_id` clause dropped 2026-07-07)
 ```sql
@@ -1127,7 +1173,7 @@ RLS is enabled on all 25 tables. Some tables carry **duplicate/overlapping polic
 
 Notable non-obvious policies:
 - **`students`**: `INSERT` and `UPDATE` policies for `authenticated` role are both `USING/WITH CHECK (true)` — i.e. **any logged-in user can insert or update any student row**, not scoped to admin/coach. Flagged by the security advisor as overly permissive. Worth revisiting if student data needs tighter scoping.
-- **`session_logs`**: performance coaches can `SELECT` sessions for their assigned students (`PCs can read sessions for assigned students`) *and* there's a separate blanket `Performance coaches can read all session_logs` policy (`is_performance_coach()` with no scoping) — the blanket one makes the assignment-scoped one redundant.
+- **`session_logs`**: college counsellors can `SELECT` sessions for their assigned students (`CCs can read sessions for assigned students`, added 2026-07-31 — a CC has no blanket read, unlike a PC). Performance coaches can `SELECT` sessions for their assigned students (`PCs can read sessions for assigned students`) *and* there's a separate blanket `Performance coaches can read all session_logs` policy (`is_performance_coach()` with no scoping) — the blanket one makes the assignment-scoped one redundant.
 - **`invoices` / `invoice_line_items` / `invoice_packages` / `student_packages` / `package_topups`**: performance coaches get `ALL` access scoped to students currently assigned to them via `pc_student_assignments` (only rows where `unassigned_at IS NULL`).
 - **`monthly_reports` and its stats tables**: teachers/coaches can only `SELECT` once `status = 'locked'` — draft reports are admin-only, invisible to everyone else until finalized.
 - **`zoom_invoices`**: teachers can insert their own, and only replace (`UPDATE`) their own **pending** ones — once `acknowledged`, immutable to the teacher. **Performance coaches are excluded** — both the INSERT and the replace-`UPDATE` `WITH CHECK` add `AND NOT EXISTS (select 1 from teachers t where t.id = teacher_id and t.is_performance_coach)`, so a coach (who also has a `teachers` row, hence a non-null `my_teacher_id()`) cannot create or replace a Zoom invoice at the DB layer, not just in the UI. Zoom invoices are a teacher-only obligation.
