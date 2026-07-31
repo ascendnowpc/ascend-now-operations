@@ -8,6 +8,12 @@ import { useStudents } from "../../hooks/useStudents";
 import { useTeachers } from "../../hooks/useTeachers";
 import { useCcAssignments } from "../../hooks/useCcAssignments";
 import { StudentStatusBadge } from "../../components/students/StudentStatusControls";
+import {
+  canAssignStudentToCc,
+  ccAssignmentSummary,
+  ccCardMatchesQuery,
+  splitCcRoster,
+} from "../../utils/ccAssignment";
 import type { CcStudentAssignment, Student } from "../../types/database";
 
 function initials(first: string, last?: string | null) {
@@ -38,7 +44,6 @@ export default function AdminCcAssignmentsPage() {
   const { teachers, loading: loadingTeachers } = useTeachers();
   const {
     assignments,
-    activeAssignments,
     loading: loadingAssignments,
     assignStudent,
     setAssignmentStatus,
@@ -64,12 +69,21 @@ export default function AdminCcAssignmentsPage() {
     });
   }
 
-  const assignedIds = new Set(activeAssignments.map((a) => a.student_id));
   const studentById = new Map(students.map((s) => [s.id, s]));
+  // Card contents, the stat tiles, the assign guard and the search all live in
+  // src/utils/ccAssignment.ts so the rules are unit-testable away from React
+  // and Supabase — see ccAssignment.test.ts.
+  const summary = ccAssignmentSummary(assignments, students.length);
+
+  function studentLabel(studentId: string): string | null {
+    const s = studentById.get(studentId);
+    return s ? `${s.id} ${s.first_name} ${s.last_name}` : null;
+  }
 
   async function handleAssign(ccId: string) {
     if (!selectedStudent) return;
-    if (assignedIds.has(selectedStudent.id)) {
+    const check = canAssignStudentToCc(assignments, selectedStudent.id);
+    if (!check.ok) {
       setAssignError(`${selectedStudent.first_name} ${selectedStudent.last_name} already has an active CC.`);
       return;
     }
@@ -99,20 +113,14 @@ export default function AdminCcAssignmentsPage() {
     setAssignError(null);
   }
 
-  const q = search.trim().toLowerCase();
-  const visibleCounsellors = useMemo(() => {
-    if (!q) return counsellors;
-    return counsellors.filter((cc) => {
-      const nameMatch = `${cc.id} ${cc.first_name} ${cc.last_name ?? ""}`.toLowerCase().includes(q);
-      if (nameMatch) return true;
-      return assignments
-        .filter((a) => a.cc_teacher_id === cc.id)
-        .some((a) => {
-          const stu = students.find((s) => s.id === a.student_id);
-          return stu && (`${stu.first_name} ${stu.last_name}`.toLowerCase().includes(q) || stu.id.toLowerCase().includes(q));
-        });
-    });
-  }, [counsellors, q, assignments, students]);
+  const visibleCounsellors = useMemo(
+    () =>
+      counsellors.filter((cc) =>
+        ccCardMatchesQuery({ query: search, counsellor: cc, assignments, studentLabel })
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [counsellors, search, assignments, students]
+  );
 
   if (loading) {
     return (
@@ -121,8 +129,6 @@ export default function AdminCcAssignmentsPage() {
       </AdminLayout>
     );
   }
-
-  const completedCount = assignments.filter((a) => a.unassigned_at !== null).length;
 
   return (
     <AdminLayout>
@@ -138,15 +144,15 @@ export default function AdminCcAssignmentsPage() {
         </Card>
         <Card className="p-4">
           <p className="text-xs text-navy-400">Total students</p>
-          <p className="text-2xl font-bold text-navy-700 mt-1">{students.length}</p>
+          <p className="text-2xl font-bold text-navy-700 mt-1">{summary.totalStudents}</p>
         </Card>
         <Card className="p-4">
           <p className="text-xs text-navy-400">With a CC</p>
-          <p className="text-2xl font-bold text-green-600 mt-1">{assignedIds.size}</p>
+          <p className="text-2xl font-bold text-green-600 mt-1">{summary.withCc}</p>
         </Card>
         <Card className="p-4">
           <p className="text-xs text-navy-400">Completed</p>
-          <p className="text-2xl font-bold text-navy-700 mt-1">{completedCount}</p>
+          <p className="text-2xl font-bold text-navy-700 mt-1">{summary.completed}</p>
         </Card>
       </div>
 
@@ -173,9 +179,7 @@ export default function AdminCcAssignmentsPage() {
       ) : (
         <div className="columns-1 lg:columns-2 gap-5">
           {visibleCounsellors.map((cc) => {
-            const mine = assignments.filter((a) => a.cc_teacher_id === cc.id);
-            const active = mine.filter((a) => a.unassigned_at === null);
-            const completed = mine.filter((a) => a.unassigned_at !== null);
+            const { active, completed } = splitCcRoster(assignments, cc.id);
 
             const isExpanded = expanded.has(cc.id);
             const isAdding = addingFor === cc.id;

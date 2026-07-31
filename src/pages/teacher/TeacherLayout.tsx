@@ -5,15 +5,16 @@ import { useAuth } from "../../context/AuthContext";
 import { useMyTeacherProfile } from "../../hooks/useMyTeacherProfile";
 import { teacherNeedsProfileCompletion } from "../../utils/profileCompletion";
 import { TeacherCompleteProfileGate } from "../../components/portal/TeacherCompleteProfileGate";
+import { staffRoleFlags, staffRoleLabel } from "../../utils/staffRole";
 
 export function TeacherLayout({ children }: { children: ReactNode }) {
   const { profile } = useAuth();
   const { teacher, loading, updateMyProfile } = useMyTeacherProfile();
-  const isCoach = profile?.role === "performance_coach" || teacher?.is_performance_coach === true;
-  const isCounsellor = profile?.role === "college_counselor" || teacher?.is_college_counselor === true;
   // A teacher may carry both flags even though users.role holds only one; PC
-  // is the richer panel, so it wins the sidebar label.
-  const roleLabel = isCoach ? "Performance Coach" : isCounsellor ? "College Counsellor" : "Teacher";
+  // is the richer panel, so it wins the sidebar label. Rules in
+  // src/utils/staffRole.ts so they're unit-testable (staffRole.test.ts).
+  const { isCoach, isCounsellor } = staffRoleFlags(profile?.role, teacher);
+  const roleLabel = staffRoleLabel({ isCoach, isCounsellor });
 
   // Mandatory first-login gate — admin never requires last name/email/phone/
   // country at add time (only first name is), so this is where they actually

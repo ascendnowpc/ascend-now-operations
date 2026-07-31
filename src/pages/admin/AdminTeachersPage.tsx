@@ -15,6 +15,7 @@ import { useAllCurriculumGroups, subjectDisplayLabel } from "../../hooks/useCurr
 import { SubjectLevelSelect } from "../../components/ui/SubjectLevelSelect";
 import type { TeacherWithSubjects } from "../../types/database";
 import { idSeqNumber } from "../../utils/entityId";
+import { isPlainTeacher } from "../../utils/staffRole";
 
 // Every subject lives under exactly one of these three branches — see
 // db/docs/SUBJECT_HIERARCHY.md §1. Not expected to grow without a wider
@@ -75,10 +76,8 @@ export default function AdminTeachersPage() {
   // Teachers only — performance coaches and college counsellors are listed
   // under their own pages (/admin/pcs, /admin/ccs), identified by the
   // is_performance_coach / is_college_counselor flags.
-  const isRoleTeacher = (t: { is_performance_coach: boolean; is_college_counselor: boolean }) =>
-    !t.is_performance_coach && !t.is_college_counselor;
-  const activeTeachers = mergeWithSubjects(rawTeachers.filter((t) => t.is_active && isRoleTeacher(t)), subjectsByTeacher).sort(byId);
-  const inactiveTeachers = mergeWithSubjects(inactiveRaw.filter(isRoleTeacher), subjectsByTeacher).sort(byId);
+  const activeTeachers = mergeWithSubjects(rawTeachers.filter((t) => t.is_active && isPlainTeacher(t)), subjectsByTeacher).sort(byId);
+  const inactiveTeachers = mergeWithSubjects(inactiveRaw.filter(isPlainTeacher), subjectsByTeacher).sort(byId);
   const curriculumLookup = new Map(curricula.map((c) => [c.id, c.name]));
   const allTeacherSubjectsFlat = Array.from(subjectsByTeacher.values()).flat();
 
