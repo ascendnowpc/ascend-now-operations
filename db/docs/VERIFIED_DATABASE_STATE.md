@@ -2,6 +2,14 @@
 
 **Generated 2026-07-01 by direct introspection of the live Supabase project (`ascend-now`, ref `uqyuczvckqxgtilpzarh`, org `ascend-now`) via the Supabase MCP connection — every table, column, constraint, policy, function, and trigger below was read straight from the running Postgres instance, not from the migration files or any prior doc.**
 
+**Updated 2026-07-31 (bug fix: every College Counsellor was being given the wrong login role).** Applied via `supabase/migrations/20260806000300_sync_teacher_role_knows_about_cc.sql`, verified live. `sync_teacher_pc_role()` predated the CC role and only knew about `is_performance_coach`; its `else` branch forced `users.role = 'teacher'`, so the `AFTER INSERT` trigger fired immediately after `create-teacher-with-user` had correctly created the account as `college_counselor` and **overwrote it back to `teacher`**. Both CCs created so far had the wrong role.
+
+Two visible symptoms, both reported: `/teacher/cc-students` is gated on `role = 'college_counselor'`, so a counsellor clicking "My Students" was bounced back to `/teacher`; and because the sidebar reads the login role first and the `teachers` flags only as a fallback, every navigation rendered the **plain-teacher sidebar** for the render before the teachers row arrived, then snapped to the CC one.
+
+Replaced by **`sync_teacher_staff_role()`** with PC → CC → teacher precedence — the same rule `loginRoleForStaff()` in `src/utils/staffRole.ts` applies when the account is created, so the trigger can no longer contradict it. The trigger now fires on `UPDATE OF is_performance_coach, is_college_counselor` (it watched only the PC column, so flipping the CC flag on an existing teacher changed nothing). The old function was dropped. Existing counsellors were backfilled by a scoped `update` touching only rows that actually disagreed.
+
+**Verified live:** both CCs now read `college_counselor` and all 13 other teacher/PC rows are unchanged; and all four transitions were exercised in a rolled-back transaction — flag CC → `college_counselor`, flag CC **and** PC → `performance_coach` (PC wins), unflag PC keeping CC → `college_counselor`, unflag both → `teacher`.
+
 **Updated 2026-07-31 (new College Counsellor role — `is_college_counselor` flag, `cc_student_assignments`, and a `college_counselor` login role).** Applied via `supabase/migrations/20260806000000_college_counselor_role_enum.sql` + `20260806000100_cc_student_assignments.sql`, verified live. A CC is a `teachers` row flagged **`is_college_counselor`**, exactly the way a performance coach is one flagged `is_performance_coach`; students are assigned through the new **`cc_student_assignments`** table, managed by an admin at `/admin/cc-assignments`. A student who has a PC may *also* have a CC — the two assignment tables are independent, and having a PC remains the norm while a CC is optional.
 
 The structural difference between the two roles is durability, and it is the whole reason CC assignments carry a status when PC assignments don't. A PC assignment is permanent for the life of the engagement, so its state lives on `students.status` (see the 2026-07-29 entry below). A CC engagement is a finite piece of work that ends while the student carries on with everything else, so **`cc_student_assignments.status`** (`active` / `completed`, deliberately **no** `paused`) sits on the assignment row. Completing sets `unassigned_at` and **never deletes the row** — session logs written during the engagement stay exactly where they are, and the closed row is what still attributes them to the counsellor who wrote them. Completing the *student* (`set_student_status(..., 'completed')`) now closes any live CC engagement too, alongside the PC one it already closed.
@@ -1092,7 +1100,7 @@ Inserts a `teachers` row from an existing `users` row, then seeds `teacher_subje
 ### `create_admin_profile(p_user_id)` → bigint, SECURITY DEFINER
 Inserts an `admins` row.
 
-### `sync_teacher_pc_role()` → trigger, SECURITY DEFINER, `SET search_path = 'public'`
+### `sync_teacher_staff_role()` → trigger, SECURITY DEFINER, `SET search_path = 'public'` (was `sync_teacher_pc_role()`; replaced 2026-07-31)
 Fires `AFTER INSERT OR UPDATE OF is_performance_coach ON teachers`. Keeps the linked `users.role` in sync: `performance_coach` if the flag is true, `teacher` otherwise.
 
 ### `prevent_self_privilege_escalation()` → trigger, SECURITY DEFINER
