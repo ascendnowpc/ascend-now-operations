@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../context/AuthContext";
+import { getCached, setCached } from "../lib/cache";
 import type { Teacher } from "../types/database";
+
+// Keyed per user — a cached row must never leak across a sign-out into a
+// different account's session.
+const cacheKey = (userId: string) => `myTeacher:${userId}`;
 
 type EditableFields = Pick<Teacher, "first_name" | "last_name" | "email" | "phone_number" | "country">;
 
@@ -13,8 +18,14 @@ type EditableFields = Pick<Teacher, "first_name" | "last_name" | "email" | "phon
  */
 export function useMyTeacherProfile() {
   const { profile } = useAuth();
-  const [teacher, setTeacher] = useState<Teacher | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Seeded from cache so a remount starts with the row already in hand.
+  // Every page renders its own TeacherLayout, so navigating remounts this
+  // hook — and TeacherLayout picks the sidebar from the teachers flags when
+  // the login role doesn't settle it. Starting at `null` each time made the
+  // sidebar visibly change shape one render after every navigation.
+  const cached = profile ? getCached<Teacher>(cacheKey(profile.id)) : undefined;
+  const [teacher, setTeacher] = useState<Teacher | null>(cached ?? null);
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -23,7 +34,17 @@ export function useMyTeacherProfile() {
       return;
     }
 
-    setLoading(true);
+    // A cache hit still revalidates in the background; it just doesn't blank
+    // the row out while it does, so nothing flickers.
+    const hit = getCached<Teacher>(cacheKey(profile.id));
+    if (hit) {
+      setTeacher(hit);
+      setError(null);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
     supabase
       .from("teachers")
       .select("*")
@@ -37,7 +58,9 @@ export function useMyTeacherProfile() {
             "No teacher profile is linked to your account yet. Contact your admin."
           );
         } else {
+          setCached(cacheKey(profile.id), data as Teacher);
           setTeacher(data as Teacher);
+          setError(null);
         }
         setLoading(false);
       });
@@ -60,6 +83,8 @@ export function useMyTeacherProfile() {
       return { error: error.message };
     }
     if (!data) return { error: "Update failed — no data returned." };
+    // Refresh the cache too, or the next mount would serve the pre-edit row.
+    if (profile) setCached(cacheKey(profile.id), data as Teacher);
     setTeacher(data as Teacher);
     return { error: null };
   }
