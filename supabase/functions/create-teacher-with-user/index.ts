@@ -75,6 +75,7 @@ serve(async (req) => {
       country,
       phone_number,
       is_performance_coach = false,
+      is_college_counselor = false,
       subjects = [],
     } = body;
 
@@ -90,7 +91,15 @@ serve(async (req) => {
       user_metadata: {
         username,
         full_name: `${first_name}${last_name ? " " + last_name : ""}`,
-        role: is_performance_coach ? "performance_coach" : "teacher",
+        // users.role holds one login role. A teacher flagged as both a PC
+        // and a CC logs in as a PC — the richer panel — and still gets the
+        // CC tabs, because those are driven by teachers.is_college_counselor
+        // (see TeacherLayout.tsx and the is_college_counselor() SQL helper).
+        role: is_performance_coach
+          ? "performance_coach"
+          : is_college_counselor
+            ? "college_counselor"
+            : "teacher",
       },
       email_confirm: true,
     });
@@ -110,6 +119,7 @@ serve(async (req) => {
         email,
         phone_number: phone_number || null,
         is_performance_coach,
+        is_college_counselor,
       })
       .select()
       .single();
@@ -137,7 +147,7 @@ serve(async (req) => {
     // background (not on the request/response critical path) so the admin
     // isn't stuck waiting on an SMTP connection; still non-fatal if it fails.
     runInBackground(
-      sendWelcomeEmail({ first_name, last_name, email, username, password, is_performance_coach })
+      sendWelcomeEmail({ first_name, last_name, email, username, password, is_performance_coach, is_college_counselor })
         .catch((emailErr) => console.error("Failed to send welcome email:", emailErr))
     );
 
@@ -154,6 +164,7 @@ async function sendWelcomeEmail(opts: {
   username: string;
   password: string;
   is_performance_coach: boolean;
+  is_college_counselor: boolean;
 }) {
   const smtpHost = Deno.env.get("SMTP_HOST");
   const smtpPort = Number(Deno.env.get("SMTP_PORT") ?? "465");
@@ -177,7 +188,7 @@ async function sendWelcomeEmail(opts: {
   });
 
   const fullName = `${opts.first_name}${opts.last_name ? " " + opts.last_name : ""}`;
-  const roleLabel = opts.is_performance_coach ? "PC" : "teacher";
+  const roleLabel = opts.is_performance_coach ? "PC" : opts.is_college_counselor ? "CC" : "teacher";
   const loginUrl = publicAppUrl ? `${publicAppUrl.replace(/\/$/, "")}/login` : null;
 
   await client.send({

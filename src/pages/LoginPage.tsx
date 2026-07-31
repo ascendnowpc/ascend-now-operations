@@ -22,7 +22,11 @@ export default function LoginPage() {
   // role-based access means the system decides, not the person.
   if (!loading && session && profile) {
     if (profile.role === "admin") return <Navigate to="/admin" replace />;
-    if (profile.role === "teacher" || profile.role === "performance_coach") {
+    if (
+      profile.role === "teacher" ||
+      profile.role === "performance_coach" ||
+      profile.role === "college_counselor"
+    ) {
       return <Navigate to="/teacher" replace />;
     }
     if (profile.role === "student") return <Navigate to="/student" replace />;

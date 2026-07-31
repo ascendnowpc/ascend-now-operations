@@ -3,7 +3,7 @@
 // Keep these in sync with the SQL migrations as the schema evolves.
 // =========================================================
 
-export type UserRole = "teacher" | "student" | "performance_coach" | "admin";
+export type UserRole = "teacher" | "student" | "performance_coach" | "college_counselor" | "admin";
 
 export interface AppUser {
   id: string; // uuid, matches auth.users.id
@@ -59,6 +59,24 @@ export interface PcStudentAssignment {
   pc_teacher_id: string;
   assigned_at: string;
   unassigned_at: string | null;
+}
+
+// A College Counsellor engagement. Unlike a PC assignment — which is permanent
+// and whose end IS the student's own `completed` status — a CC engagement
+// finishes on its own schedule while the student carries on, so the status
+// lives on the assignment row. There is deliberately no "paused".
+export type CcAssignmentStatus = "active" | "completed";
+
+export interface CcStudentAssignment {
+  id: number;
+  student_id: string;
+  cc_teacher_id: string;
+  status: CcAssignmentStatus;
+  assigned_at: string;
+  // Set when the engagement completes. The row is never deleted — session logs
+  // written during it stay attributable to the counsellor who wrote them.
+  unassigned_at: string | null;
+  status_changed_at: string | null;
 }
 
 // One "Performing Achievements" card on a coach's visual profile — a student
@@ -223,6 +241,9 @@ export interface Teacher {
   email: string | null;
   phone_number: string | null;
   is_performance_coach: boolean;
+  // Independent of is_performance_coach — a teacher may be flagged as both,
+  // even though users.role can only carry one of them as the login role.
+  is_college_counselor: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;

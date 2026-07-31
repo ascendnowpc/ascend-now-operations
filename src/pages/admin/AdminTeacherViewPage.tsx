@@ -143,6 +143,10 @@ export default function AdminTeacherViewPage() {
             label="Performance coach"
             value={teacher.is_performance_coach ? "Yes" : "No"}
           />
+          <Field
+            label="College counsellor"
+            value={teacher.is_college_counselor ? "Yes" : "No"}
+          />
           <Field label="Linked user account ID" value={teacher.user_id ?? "Not linked yet"} />
           <Field
             label="Subjects"

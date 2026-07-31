@@ -14,6 +14,7 @@ import { uploadSubjectNoteFile } from "../../utils/subjectNoteFile";
 import { fetchSessionLogById, useSessionLogs } from "../../hooks/useSessionLogs";
 import { useMonthlyReports, isDateInLockedMonth } from "../../hooks/useMonthlyReports";
 import { usePcAssignments } from "../../hooks/usePcAssignments";
+import { useCcAssignments } from "../../hooks/useCcAssignments";
 import { useProgramTypes } from "../../hooks/useProgramTypes";
 import { useSessionDurationSettings } from "../../hooks/useSessionDurationSettings";
 import { useCourseTypes } from "../../hooks/useCourseTypes";
@@ -141,15 +142,25 @@ export function SessionLogFormView({
   const { groups: allGroups } = useAllCurriculumGroups();
   const { courseTypes } = useCourseTypes();
   const { activeAssignments, getPcForStudent } = usePcAssignments();
+  const { activeAssignments: activeCcAssignments } = useCcAssignments();
 
   const isCoach = role === "teacher" && currentTeacher?.is_performance_coach === true;
+  const isCounsellor = role === "teacher" && currentTeacher?.is_college_counselor === true;
   const backListPath = role === "admin" ? "/admin/session-logs" : "/teacher/sessions";
   const viewPath = (sessionId: string) => role === "admin" ? `/admin/session-logs/${sessionId}` : `/teacher/sessions/${sessionId}`;
 
-  // PCs may only log/search students assigned to them (teacher role only —
-  // admin can search/pick any student, same as it always could).
-  const assignedStudentIds = role === "teacher" && isCoach && currentTeacher
-    ? new Set(activeAssignments.filter((a) => a.pc_teacher_id === currentTeacher.id).map((a) => a.student_id))
+  // PCs and CCs may only log/search students assigned to them (teacher role
+  // only — admin can search/pick any student, same as it always could).
+  // Someone carrying both flags gets the union of the two rosters.
+  const assignedStudentIds = role === "teacher" && (isCoach || isCounsellor) && currentTeacher
+    ? new Set([
+        ...(isCoach
+          ? activeAssignments.filter((a) => a.pc_teacher_id === currentTeacher.id).map((a) => a.student_id)
+          : []),
+        ...(isCounsellor
+          ? activeCcAssignments.filter((a) => a.cc_teacher_id === currentTeacher.id).map((a) => a.student_id)
+          : []),
+      ])
     : undefined;
 
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -893,7 +904,7 @@ export function SessionLogFormView({
                     value={selectedStudent?.id ?? null}
                     onChange={(s) => { setSelectedStudent(s); if (s) setCustomStudentName(""); }}
                     allowedIds={assignedStudentIds}
-                    emptyAllowedMessage={isCoach ? "No students are assigned to you yet." : undefined}
+                    emptyAllowedMessage={isCoach || isCounsellor ? "No students are assigned to you yet." : undefined}
                   />
                   {!selectedStudent && (
                     <TextInput
@@ -911,7 +922,7 @@ export function SessionLogFormView({
                   onChange={setSelectedStudent}
                   required
                   allowedIds={assignedStudentIds}
-                  emptyAllowedMessage={isCoach ? "No students are assigned to you yet — ask an admin, or assign one to yourself from My Students." : undefined}
+                  emptyAllowedMessage={isCoach || isCounsellor ? "No students are assigned to you yet — ask an admin to assign one." : undefined}
                 />
               )
             )}

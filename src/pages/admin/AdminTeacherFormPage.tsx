@@ -23,11 +23,13 @@ export default function AdminTeacherFormPage() {
   const navigate = useNavigate();
   const { updateTeacher } = useTeachers();
 
-  // Adding from the PC page (/admin/pcs → ?pc=1) pre-ticks the performance
-  // coach box; adding from the Teachers page leaves it unticked. Still editable
-  // either way — this only sets the default.
+  // Which role page the "Add" button came from decides what the new teacher
+  // is: /admin/pcs → ?pc=1 makes a Performance Coach, /admin/ccs → ?cc=1 a
+  // College Counsellor, /admin/teachers → neither, a plain teacher. On edit
+  // both flags come from the record and are carried through untouched.
   const [searchParams] = useSearchParams();
   const createAsCoach = !isEditing && searchParams.get("pc") === "1";
+  const createAsCounsellor = !isEditing && searchParams.get("cc") === "1";
 
   // Teacher fields
   const [firstName, setFirstName] = useState("");
@@ -37,6 +39,7 @@ export default function AdminTeacherFormPage() {
   const [dialCode, setDialCode] = useState("+1");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isCoach, setIsCoach] = useState(createAsCoach);
+  const [isCounsellor, setIsCounsellor] = useState(createAsCounsellor);
   // Edit mode: the linked login account + the email as loaded, so an email
   // change can be routed through the update-user-email edge function (which
   // keeps the Auth login credential + public.users.email in sync, not just
@@ -153,6 +156,7 @@ export default function AdminTeacherFormPage() {
         if (match) { setDialCode(match[1]); setPhoneNumber(match[2]); }
         else setPhoneNumber(stored);
         setIsCoach(data.is_performance_coach);
+        setIsCounsellor(data.is_college_counselor);
       }
       setLoading(false);
     });
@@ -248,11 +252,12 @@ export default function AdminTeacherFormPage() {
         country: country || null,
         phone_number: fullPhone || null,
         is_performance_coach: isCoach,
+        is_college_counselor: isCounsellor,
         ...(syncedViaAuth ? {} : { email: trimmedEmail }),
       });
       setSaving(false);
       if (error) { setError(error); return; }
-      navigate(isCoach ? `/admin/pcs/${teacherId}` : `/admin/teachers/${teacherId}`);
+      navigate(recordPath(teacherId));
       return;
     }
 
@@ -269,6 +274,7 @@ export default function AdminTeacherFormPage() {
           country: country || null,
           phone_number: fullPhone || null,
           is_performance_coach: isCoach,
+          is_college_counselor: isCounsellor,
           subjects: newSubjects.map((s) => ({ subject_id: s.subjectId, curriculum_id: s.curriculumId })),
         },
       }
@@ -281,7 +287,15 @@ export default function AdminTeacherFormPage() {
       return;
     }
 
-    navigate(isCoach ? `/admin/pcs/${data!.data.id}` : `/admin/teachers/${data!.data.id}`);
+    navigate(recordPath(data!.data.id));
+  }
+
+  // A PC has its own detail page; a CC doesn't (their record is the plain
+  // teacher one), so a counsellor lands back on the CC list instead.
+  function recordPath(savedId: string) {
+    if (isCoach) return `/admin/pcs/${savedId}`;
+    if (isCounsellor) return "/admin/ccs";
+    return `/admin/teachers/${savedId}`;
   }
 
   if (loading) {
@@ -295,13 +309,23 @@ export default function AdminTeacherFormPage() {
   return (
     <AdminLayout>
       <PageHeader
-        title={isEditing ? "Edit teacher" : createAsCoach ? "Add performance coach" : "Add teacher"}
+        title={
+          isEditing
+            ? "Edit teacher"
+            : createAsCoach
+              ? "Add performance coach"
+              : createAsCounsellor
+                ? "Add college counsellor"
+                : "Add teacher"
+        }
         description={
           isEditing
             ? "Update this teacher's details. To manage subjects, use the Teacher Subjects tab."
             : createAsCoach
               ? "Add a new performance coach and create their login account in one step."
-              : "Add a new teacher and create their login account in one step."
+              : createAsCounsellor
+                ? "Add a new college counsellor and create their login account in one step."
+                : "Add a new teacher and create their login account in one step."
         }
       />
 
@@ -525,9 +549,21 @@ export default function AdminTeacherFormPage() {
 
           <div className="flex gap-3 mt-2">
             <Button type="submit" disabled={saving}>
-              {saving ? "Saving…" : isEditing ? "Save changes" : createAsCoach ? "Create performance coach" : "Create teacher"}
+              {saving
+                ? "Saving…"
+                : isEditing
+                  ? "Save changes"
+                  : createAsCoach
+                    ? "Create performance coach"
+                    : createAsCounsellor
+                      ? "Create college counsellor"
+                      : "Create teacher"}
             </Button>
-            <Button type="button" variant="ghost" onClick={() => navigate(createAsCoach ? "/admin/pcs" : "/admin/teachers")}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => navigate(createAsCoach ? "/admin/pcs" : createAsCounsellor ? "/admin/ccs" : "/admin/teachers")}
+            >
               Cancel
             </Button>
           </div>
