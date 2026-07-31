@@ -14,6 +14,7 @@ import { useCurricula } from "../../hooks/useCurricula";
 import { useAllCurriculumGroups, subjectDisplayLabel } from "../../hooks/useCurriculumGroups";
 import { invokeEdgeFunction, describeFunctionError } from "../../lib/edgeFunctions";
 import { COUNTRY_OPTIONS, COUNTRY_DIAL_CODES } from "../../data/countries";
+import { staffRecordPath } from "../../utils/staffRole";
 
 type Category = "academic" | "beyond_academic" | "college_counselling";
 
@@ -293,9 +294,7 @@ export default function AdminTeacherFormPage() {
   // A PC has its own detail page; a CC doesn't (their record is the plain
   // teacher one), so a counsellor lands back on the CC list instead.
   function recordPath(savedId: string) {
-    if (isCoach) return `/admin/pcs/${savedId}`;
-    if (isCounsellor) return "/admin/ccs";
-    return `/admin/teachers/${savedId}`;
+    return staffRecordPath(savedId, { isCoach, isCounsellor });
   }
 
   if (loading) {

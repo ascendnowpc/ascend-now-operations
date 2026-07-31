@@ -2,10 +2,14 @@ import { describe, it, expect } from "vitest";
 import {
   CC_ASSIGNMENT_STATUSES,
   activeCcAssignments,
+  canAssignStudentToCc,
+  ccAssignmentSummary,
+  ccCardMatchesQuery,
   ccForStudent,
   isCcAssignmentActive,
   latestCcForStudent,
   loggableStudentIds,
+  splitCcRoster,
   studentIdsForCc,
 } from "./ccAssignment";
 import type { CcStudentAssignment } from "../types/database";
@@ -175,5 +179,168 @@ describe("loggableStudentIds", () => {
 
   it("falls back to unrestricted when the teacher record hasn't loaded yet", () => {
     expect(loggableStudentIds({ ...base, teacherId: null, isCounsellor: true })).toBeUndefined();
+  });
+});
+
+describe("canAssignStudentToCc", () => {
+  it("allows a student who has never had a counsellor", () => {
+    expect(canAssignStudentToCc([], "STU-1")).toEqual({ ok: true });
+  });
+
+  it("allows a student whose previous engagement completed", () => {
+    // Completing frees the student up — that's what closing the row is for.
+    const assignments = [
+      row({ id: 1, student_id: "STU-1", cc_teacher_id: "CC-1", status: "completed", unassigned_at: "2026-07-20T00:00:00Z" }),
+    ];
+    expect(canAssignStudentToCc(assignments, "STU-1")).toEqual({ ok: true });
+  });
+
+  it("refuses a student who already has a live counsellor, and names them", () => {
+    // uq_active_cc_per_student would reject this anyway; catching it here is
+    // what lets the page say who, instead of surfacing a constraint error.
+    const assignments = [row({ id: 1, student_id: "STU-1", cc_teacher_id: "CC-1" })];
+    expect(canAssignStudentToCc(assignments, "STU-1")).toEqual({
+      ok: false,
+      reason: "already_assigned",
+      currentCcTeacherId: "CC-1",
+    });
+  });
+
+  it("ignores another student's live engagement", () => {
+    const assignments = [row({ id: 1, student_id: "STU-2", cc_teacher_id: "CC-1" })];
+    expect(canAssignStudentToCc(assignments, "STU-1")).toEqual({ ok: true });
+  });
+});
+
+describe("splitCcRoster", () => {
+  const assignments = [
+    row({ id: 4, student_id: "STU-1", cc_teacher_id: "CC-1" }),
+    row({ id: 3, student_id: "STU-2", cc_teacher_id: "CC-1", status: "completed", unassigned_at: "2026-07-20T00:00:00Z" }),
+    row({ id: 2, student_id: "STU-3", cc_teacher_id: "CC-2" }),
+    row({ id: 1, student_id: "STU-4", cc_teacher_id: "CC-2", status: "completed", unassigned_at: "2026-06-01T00:00:00Z" }),
+  ];
+
+  it("separates a counsellor's live students from their finished ones", () => {
+    const { active, completed } = splitCcRoster(assignments, "CC-1");
+    expect(active.map((a) => a.id)).toEqual([4]);
+    expect(completed.map((a) => a.id)).toEqual([3]);
+  });
+
+  it("never leaks another counsellor's rows into either list", () => {
+    const { active, completed } = splitCcRoster(assignments, "CC-1");
+    expect([...active, ...completed].every((a) => a.cc_teacher_id === "CC-1")).toBe(true);
+  });
+
+  it("gives two empty lists for a counsellor with nobody assigned", () => {
+    expect(splitCcRoster(assignments, "CC-99")).toEqual({ active: [], completed: [] });
+  });
+
+  it("preserves the incoming order within each list", () => {
+    // The hook fetches assigned_at desc; the card shows newest first.
+    const same = [
+      row({ id: 3, student_id: "STU-1", cc_teacher_id: "CC-1" }),
+      row({ id: 2, student_id: "STU-2", cc_teacher_id: "CC-1" }),
+      row({ id: 1, student_id: "STU-3", cc_teacher_id: "CC-1" }),
+    ];
+    expect(splitCcRoster(same, "CC-1").active.map((a) => a.id)).toEqual([3, 2, 1]);
+  });
+});
+
+describe("ccAssignmentSummary", () => {
+  it("counts students with a live counsellor, not assignment rows", () => {
+    // STU-1 has been through two counsellors — still one student with a CC.
+    const assignments = [
+      row({ id: 3, student_id: "STU-1", cc_teacher_id: "CC-2" }),
+      row({ id: 2, student_id: "STU-1", cc_teacher_id: "CC-1", status: "completed", unassigned_at: "2026-06-01T00:00:00Z" }),
+      row({ id: 1, student_id: "STU-2", cc_teacher_id: "CC-1" }),
+    ];
+    expect(ccAssignmentSummary(assignments, 10)).toEqual({
+      totalStudents: 10,
+      withCc: 2,
+      withoutCc: 8,
+      completed: 1,
+    });
+  });
+
+  it("does not count a completed student as having a CC", () => {
+    const assignments = [
+      row({ id: 1, student_id: "STU-1", cc_teacher_id: "CC-1", status: "completed", unassigned_at: "2026-07-20T00:00:00Z" }),
+    ];
+    expect(ccAssignmentSummary(assignments, 4)).toMatchObject({ withCc: 0, withoutCc: 4, completed: 1 });
+  });
+
+  it("counts two finished engagements for one student as two completions", () => {
+    // Two counsellors each finished a real piece of work for this student.
+    const assignments = [
+      row({ id: 2, student_id: "STU-1", cc_teacher_id: "CC-2", status: "completed", unassigned_at: "2026-07-20T00:00:00Z" }),
+      row({ id: 1, student_id: "STU-1", cc_teacher_id: "CC-1", status: "completed", unassigned_at: "2026-04-30T00:00:00Z" }),
+    ];
+    expect(ccAssignmentSummary(assignments, 1)).toMatchObject({ withCc: 0, completed: 2 });
+  });
+
+  it("reports zeroes when nothing has been assigned yet", () => {
+    expect(ccAssignmentSummary([], 0)).toEqual({ totalStudents: 0, withCc: 0, withoutCc: 0, completed: 0 });
+  });
+
+  it("never reports a negative 'without a CC' count", () => {
+    const assignments = [
+      row({ id: 2, student_id: "STU-1", cc_teacher_id: "CC-1" }),
+      row({ id: 1, student_id: "STU-2", cc_teacher_id: "CC-1" }),
+    ];
+    expect(ccAssignmentSummary(assignments, 1).withoutCc).toBe(0);
+  });
+});
+
+describe("ccCardMatchesQuery", () => {
+  const counsellor = { id: "CCT-7", first_name: "Ada", last_name: "Lovelace" };
+  const assignments = [
+    row({ id: 2, student_id: "STU-1", cc_teacher_id: "CCT-7" }),
+    row({ id: 1, student_id: "STU-2", cc_teacher_id: "CCT-7", status: "completed", unassigned_at: "2026-07-20T00:00:00Z" }),
+  ];
+  const labels: Record<string, string> = {
+    "STU-1": "STU-1 Grace Hopper",
+    "STU-2": "STU-2 Alan Turing",
+  };
+  const studentLabel = (id: string) => labels[id] ?? null;
+  const match = (query: string) => ccCardMatchesQuery({ query, counsellor, assignments, studentLabel });
+
+  it("shows every card when the search box is empty", () => {
+    expect(match("")).toBe(true);
+    expect(match("   ")).toBe(true);
+  });
+
+  it("matches the counsellor's own name, case-insensitively", () => {
+    expect(match("lovelace")).toBe(true);
+    expect(match("ADA")).toBe(true);
+  });
+
+  it("matches the counsellor's id", () => {
+    expect(match("CCT-7")).toBe(true);
+  });
+
+  it("matches on one of their students by name or id", () => {
+    expect(match("grace")).toBe(true);
+    expect(match("STU-1")).toBe(true);
+  });
+
+  it("still finds the counsellor by a student they already completed", () => {
+    // The point of keeping the closed row: the finished student stays findable
+    // under the counsellor who saw them through.
+    expect(match("turing")).toBe(true);
+  });
+
+  it("does not match an unrelated term", () => {
+    expect(match("babbage")).toBe(false);
+  });
+
+  it("does not match another counsellor's student", () => {
+    const other = [row({ id: 1, student_id: "STU-1", cc_teacher_id: "CCT-8" })];
+    expect(ccCardMatchesQuery({ query: "grace", counsellor, assignments: other, studentLabel })).toBe(false);
+  });
+
+  it("tolerates a student whose record hasn't loaded", () => {
+    expect(
+      ccCardMatchesQuery({ query: "grace", counsellor, assignments, studentLabel: () => null })
+    ).toBe(false);
   });
 });
