@@ -8,7 +8,7 @@ import { TextInput, SelectInput, PhoneInput } from "../../components/ui/Input";
 import { Spinner } from "../../components/ui/Spinner";
 import { SubjectLevelSelect } from "../../components/ui/SubjectLevelSelect";
 import { BeyondAcademicSubjectSelect, type BeyondAcademicOption } from "../../components/ui/BeyondAcademicSubjectSelect";
-import { fetchTeacherById, useTeachers, useTeacherSubjects } from "../../hooks/useTeachers";
+import { fetchTeacherById, invalidateTeachersCache, useTeachers, useTeacherSubjects } from "../../hooks/useTeachers";
 import { useSubjects } from "../../hooks/useSubjects";
 import { useCurricula } from "../../hooks/useCurricula";
 import { useAllCurriculumGroups, subjectDisplayLabel } from "../../hooks/useCurriculumGroups";
@@ -287,6 +287,12 @@ export default function AdminTeacherFormPage() {
       setError(resultError);
       return;
     }
+
+    // The edge function wrote the teachers row straight to the database, so
+    // the cached list this app keeps is now stale — drop it, or the CC/PC/
+    // teacher list we're about to navigate to would render without the person
+    // just created until the cache expired on its own.
+    invalidateTeachersCache();
 
     navigate(recordPath(data!.data.id));
   }

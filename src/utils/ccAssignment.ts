@@ -181,3 +181,59 @@ export function ccCardMatchesQuery(opts: {
     .filter((a) => a.cc_teacher_id === id)
     .some((a) => (opts.studentLabel(a.student_id) ?? "").toLowerCase().includes(q));
 }
+
+/** One row of a College Counsellor's My Students table. */
+export interface CcRosterRow {
+  assignmentId: number;
+  studentId: string;
+  firstName: string;
+  lastName: string;
+  /** The *engagement's* status, not the student's own. */
+  status: CcAssignmentStatus;
+  assignedAt: string;
+  unassignedAt: string | null;
+}
+
+/**
+ * A counsellor's roster, joined to student names and ready to render.
+ *
+ * The status here is the engagement's, derived from `unassigned_at` — NOT the
+ * student's own active/paused/completed. Those two are independent by design
+ * (a counsellor can be finished with a student who is still very much active),
+ * so showing the student's status on a CC's list, as the shared admin list
+ * did, tells the counsellor nothing about their own work and hides the
+ * engagements they've actually completed.
+ *
+ * Assignments whose student hasn't loaded are dropped rather than rendered as
+ * a blank row. Input order (assigned_at desc) is preserved.
+ */
+export function ccRosterRows(
+  assignments: CcStudentAssignment[],
+  students: { id: string; first_name: string; last_name: string }[],
+  ccTeacherId: string
+): CcRosterRow[] {
+  const byId = new Map(students.map((s) => [s.id, s]));
+  const rows: CcRosterRow[] = [];
+  for (const a of assignments) {
+    if (a.cc_teacher_id !== ccTeacherId) continue;
+    const student = byId.get(a.student_id);
+    if (!student) continue;
+    rows.push({
+      assignmentId: a.id,
+      studentId: a.student_id,
+      firstName: student.first_name,
+      lastName: student.last_name,
+      status: isCcAssignmentActive(a) ? "active" : "completed",
+      assignedAt: a.assigned_at,
+      unassignedAt: a.unassigned_at,
+    });
+  }
+  return rows;
+}
+
+/** Free-text search over a roster row: student id, first name, last name. */
+export function ccRosterRowMatches(row: CcRosterRow, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return `${row.studentId} ${row.firstName} ${row.lastName}`.toLowerCase().includes(q);
+}
