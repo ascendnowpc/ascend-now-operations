@@ -6,6 +6,7 @@ import { Button } from "../../components/ui/Button";
 import { TextInput } from "../../components/ui/Input";
 import { Spinner } from "../../components/ui/Spinner";
 import { useAuth } from "../../context/AuthContext";
+import { useAdmins } from "../../hooks/useAdmins";
 
 function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -23,6 +24,10 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
 // plus username and password change cards.
 export default function AdminProfilePage() {
   const { profile, loading, updateFullName, updateEmail, updateUsername, updatePassword } = useAuth();
+  // The `admins` marker row carries this admin's own mnemonic id (e.g.
+  // ARIS26-2) — `profile.id` is the auth uuid, not the id used anywhere else.
+  const { admins } = useAdmins();
+  const adminId = admins.find((a) => a.user_id === profile?.id)?.id ?? null;
 
   // ── Personal information ──
   const [editing, setEditing] = useState(false);
@@ -154,6 +159,7 @@ export default function AdminProfilePage() {
 
             {!editing ? (
               <dl className="grid grid-cols-2 gap-x-6">
+                <InfoRow label="ID" value={adminId} />
                 <InfoRow label="Full name" value={profile.full_name} />
                 <InfoRow label="Email" value={profile.email} />
               </dl>
