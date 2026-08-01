@@ -2,26 +2,28 @@
 -- David, completing the 4 rows transcribed from the "David Session Log
 -- (2026)" sheet.
 --
--- Split out from `20260807000200` purely so his PC is emailed once rather
--- than not at all. `notify-pool-issue` skips whenever another ambiguous,
--- still-unassigned session already exists for the same (student,
--- course_type, teacher, subject) — so it must be invoked while the 2026-06-07
--- session is the only one pending. With all three inserted first, *every*
--- invocation finds a sibling and skips, and nobody is told.
+-- Split out from `20260807000200` so that only ONE session was left pending
+-- at a time. Batu's All-In-One bundle has four unlocked Beyond Academic pools
+-- and "Passion Projects" matches none of their `pool_label`s, so
+-- `handle_session_log_package_lock()` cannot resolve these on its own — the
+-- first one was deliberately left ambiguous for the PC to decide, rather than
+-- inserting all three and burying the decision under three identical alerts.
+-- (`notify-pool-issue` skips whenever another ambiguous, still-unassigned
+-- session already exists for the same (student, course_type, teacher,
+-- subject), so with all three inserted at once *every* invocation would find
+-- a sibling and skip, and nobody would be told at all.)
 --
--- **Apply order therefore matters:** `20260807000200`, then invoke
--- `notify-pool-issue` for the 2026-06-07 session, then this. That reproduces
--- what would have happened had David logged the sessions one at a time
--- through the UI — the first notifies his PC, the rest stay quiet.
+-- **Apply order therefore matters:** `20260807000200` first, then the pool
+-- decision, then this. That reproduces what would have happened had David
+-- logged the sessions one at a time through the UI.
 --
--- Like the 2026-06-07 row, both of these are left unresolved on purpose:
--- Batu's All-In-One bundle has four unlocked Beyond Academic pools and
--- "Passion Projects" matches none of their `pool_label`s, so
--- `handle_session_log_package_lock()` sets `pool_ambiguous` and leaves
--- `student_package_id` NULL for Rana to resolve from the "Pending Deduction"
--- section of Batu's "Learner's actual hours" tab. Once she picks a pool, the
--- recorded (teacher, subject) → pool resolution makes David's future Passion
--- Project sessions land there automatically.
+-- The decision has since been made: the 2026-06-07 session was assigned to
+-- the bundle's **"Primary Project"** pool, which recorded a
+-- `session_log_pool_resolutions` row for (Batu, Beyond Academic, David,
+-- Passion Projects). Both rows below therefore resolve straight to that same
+-- pool on insert via the trigger's sticky-resolution branch — no ambiguity,
+-- no further alert — and David's future Passion Project sessions for Batu
+-- will land there automatically too.
 
 insert into public.session_logs (
   student_id, student_first_name, student_last_name, session_date,
