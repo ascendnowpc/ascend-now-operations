@@ -3,8 +3,6 @@ import { supabase } from "../lib/supabaseClient";
 import { getCached, setCached } from "../lib/cache";
 import { ENGAGEMENT_SCORE } from "../utils/engagementScore";
 import {
-  type DateRangePreset,
-  DEFAULT_DATE_RANGE_PRESET,
   resolvePresetRange,
   pickGranularity,
   generateBucketKeys,
@@ -14,41 +12,10 @@ import {
   type TrendGranularity,
 } from "../utils/dateRangePresets";
 
-export interface AnalysisFilters {
-  preset: DateRangePreset;
-  customFrom?: string;
-  customTo?: string;
-  teacherIds: string[];
-  coordinatorIds: string[];
-  countries: string[];
-  studentIds: string[];
-  noShowType?: "any" | "no_show_1" | "no_show_2" | "no_show_plus";
-  flagged?: "yes" | "no";
-  engagementRating?: "low" | "medium" | "high";
-}
-
-export function defaultAnalysisFilters(): AnalysisFilters {
-  return {
-    preset: DEFAULT_DATE_RANGE_PRESET,
-    teacherIds: [],
-    coordinatorIds: [],
-    countries: [],
-    studentIds: [],
-  };
-}
-
-export function hasActiveFilters(f: AnalysisFilters): boolean {
-  return (
-    f.preset !== DEFAULT_DATE_RANGE_PRESET ||
-    f.teacherIds.length > 0 ||
-    f.coordinatorIds.length > 0 ||
-    f.countries.length > 0 ||
-    f.studentIds.length > 0 ||
-    Boolean(f.noShowType) ||
-    Boolean(f.flagged) ||
-    Boolean(f.engagementRating)
-  );
-}
+// Pure, unit-tested in utils/analysisFilters; re-exported here for existing callers.
+export { defaultAnalysisFilters, hasActiveFilters } from "../utils/analysisFilters";
+export type { AnalysisFilters } from "../utils/analysisFilters";
+import type { AnalysisFilters } from "../utils/analysisFilters";
 
 export interface TrendPoint {
   key: string;

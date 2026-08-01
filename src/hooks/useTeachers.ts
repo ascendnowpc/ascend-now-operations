@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { invokeEdgeFunction, describeFunctionError } from "../lib/edgeFunctions";
-import type { Teacher, TeacherSubject, TeacherWithSubjects } from "../types/database";
+import type { Teacher, TeacherSubject } from "../types/database";
 import { getCached, setCached, invalidateCache } from "../lib/cache";
 
 const TEACHERS_KEY = "teachers";
@@ -167,20 +167,8 @@ function groupByTeacher(rows: TeacherSubject[]): Map<string, TeacherSubject[]> {
   return map;
 }
 
-// Merge plain Teacher[] with the subjects map into TeacherWithSubjects[]
-export function mergeWithSubjects(
-  teachers: Teacher[],
-  subjectsByTeacher: Map<string, TeacherSubject[]>
-): TeacherWithSubjects[] {
-  return teachers.map((t) => ({
-    ...t,
-    teacher_subjects: (subjectsByTeacher.get(t.id) ?? []).map((s) => ({
-      id: s.id,
-      subject_id: s.subject_id,
-      curriculum_id: s.curriculum_id,
-    })),
-  }));
-}
+// Pure, unit-tested in utils/teacherSubjects; re-exported here for existing callers.
+export { mergeWithSubjects } from "../utils/teacherSubjects";
 
 // ---------------------------------------------------------------------------
 // useTeacherSubjects — subjects for a single teacher (used in editors)
