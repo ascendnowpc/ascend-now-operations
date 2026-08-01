@@ -15,6 +15,7 @@ import { useCurricula } from "../../hooks/useCurricula";
 import { useAllCurriculumGroups, groupSubjectsByBase } from "../../hooks/useCurriculumGroups";
 import { useStudents } from "../../hooks/useStudents";
 import { useProgramTypes } from "../../hooks/useProgramTypes";
+import { teacherFilterOptions } from "../../utils/teacherOptions";
 import {
   NO_SHOW_LABELS,
   NO_SHOW_OPTIONS,
@@ -251,7 +252,11 @@ export function SessionLogsListView({
     return () => clearTimeout(t);
   }, [lastNameInput]);
 
-  const performanceCoaches = teachers.filter((t) => t.is_performance_coach);
+  // Active staff only — see teacherFilterOptions for why, and for what it
+  // deliberately costs (a retired teacher's logs stay listed, just not
+  // filterable by name).
+  const teacherFilterChoices = teacherFilterOptions(teachers);
+  const coachFilterChoices = teacherFilterOptions(teachers, { performanceCoachesOnly: true });
   const parentProgramTypes = programTypes.filter((p) => p.parent_id === null && p.is_active);
 
   const isRealProgramType = filterProgramSelection !== "" &&
@@ -566,12 +571,12 @@ export function SessionLogsListView({
           {showTeacher && (
             <SelectInput label="Teacher" placeholder="All teachers" value={filters.teacherId ? String(filters.teacherId) : ""}
               onChange={(e) => setFilters((prev) => ({ ...prev, teacherId: e.target.value || undefined }))}
-              options={teachers.map((t) => ({ value: String(t.id), label: `${t.first_name} ${t.last_name ?? ""}`.trim() }))} />
+              options={teacherFilterChoices} />
           )}
           {!hideCoordinatorFilter && (
             <SelectInput label="Performance Coach" placeholder="All performance coaches" value={filters.coordinatorId ? String(filters.coordinatorId) : ""}
               onChange={(e) => setFilters((prev) => ({ ...prev, coordinatorId: e.target.value || undefined }))}
-              options={performanceCoaches.map((t) => ({ value: String(t.id), label: `${t.first_name} ${t.last_name ?? ""}`.trim() }))} />
+              options={coachFilterChoices} />
           )}
           <SelectInput label="No Show" placeholder="All sessions" value={filters.noShowType ?? ""}
             onChange={(e) => setFilters((prev) => ({ ...prev, noShowType: e.target.value ? (e.target.value as SessionLogFilters['noShowType']) : undefined }))}
