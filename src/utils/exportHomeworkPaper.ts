@@ -11,7 +11,8 @@ import type { GeneratedPaper, GeneratedQuestion, QuestionFigure } from "../types
 // Question Sheet (prompts only, with space to write). Reuses the repo's existing
 // jspdf / jspdf-autotable / docx tooling — no new document library. Download only.
 
-export type HomeworkSheet = "question" | "answer";
+export type { HomeworkSheet } from "./homeworkPaperFormat";
+import { marksLabel, sheetTitle, fileBase, dataUrlImageFormat, type HomeworkSheet } from "./homeworkPaperFormat";
 
 export interface HomeworkExportMeta {
   studentDisplay?: string;
@@ -21,36 +22,10 @@ export interface HomeworkExportMeta {
 
 const LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 
-function marksLabel(n: number) {
-  return `${n} ${n === 1 ? "mark" : "marks"}`;
-}
-
-function sheetTitle(sheet: HomeworkSheet) {
-  return sheet === "answer" ? "Homework — Answer Sheet" : "Homework — Question Sheet";
-}
-
-function fileBase(paper: GeneratedPaper, sheet: HomeworkSheet) {
-  return `homework_${paper.student_id}_${sheet}-sheet`;
-}
-
 // Figures are stored as data: URLs (see QuestionFigure) — loading them through
 // an <img> is the simplest way to recover their natural pixel size, which both
 // jsPDF's addImage and docx's ImageRun `transformation` need up front to avoid
 // stretching the image out of its aspect ratio.
-// Figures are cropped as PNG by parse-homework-paper, but this reads the
-// actual data: URL mime type rather than assuming a format — jsPDF's
-// addImage needs an explicit format matching the real bytes, and guessing
-// wrong silently corrupts the embedded image instead of erroring.
-function dataUrlImageFormat(dataUrl: string): "JPEG" | "PNG" | "WEBP" | null {
-  const m = /^data:image\/(\w+);base64,/.exec(dataUrl);
-  if (!m) return null;
-  const subtype = m[1].toLowerCase();
-  if (subtype === "jpeg" || subtype === "jpg") return "JPEG";
-  if (subtype === "png") return "PNG";
-  if (subtype === "webp") return "WEBP";
-  return null;
-}
-
 function loadImageSize(dataUrl: string): Promise<{ width: number; height: number } | null> {
   return new Promise((resolve) => {
     const img = new Image();
