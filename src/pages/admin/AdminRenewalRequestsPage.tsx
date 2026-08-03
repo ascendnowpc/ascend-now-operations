@@ -49,7 +49,8 @@ export default function AdminRenewalRequestsPage() {
     return s ? `${s.id} — ${s.first_name} ${s.last_name}` : id;
   }
 
-  function pcName(id: string) {
+  // The requester is a coach or a counsellor — both file these now.
+  function requesterName(id: string) {
     const t = teachers.find((t) => t.id === id);
     return t ? `${t.first_name} ${t.last_name ?? ""}`.trim() : `Teacher ${id}`;
   }
@@ -64,7 +65,7 @@ export default function AdminRenewalRequestsPage() {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
-      if (q && !studentName(r.student_id).toLowerCase().includes(q) && !pcName(r.requested_by_teacher_id).toLowerCase().includes(q)) return false;
+      if (q && !studentName(r.student_id).toLowerCase().includes(q) && !requesterName(r.requested_by_teacher_id).toLowerCase().includes(q)) return false;
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -76,7 +77,7 @@ export default function AdminRenewalRequestsPage() {
     const { error } = await acknowledge(r.id, profile.id);
     setBusyId(null);
     if (error) { setToast({ message: error, variant: "error" }); return; }
-    setToast({ message: `Acknowledged — ${pcName(r.requested_by_teacher_id)} will see this as acknowledged.`, variant: "success" });
+    setToast({ message: `Acknowledged — ${requesterName(r.requested_by_teacher_id)} will see this as acknowledged.`, variant: "success" });
     load();
   }
 
@@ -93,7 +94,7 @@ export default function AdminRenewalRequestsPage() {
         </div>
       ),
     },
-    { header: "Requested by", accessor: (r) => pcName(r.requested_by_teacher_id) },
+    { header: "Requested by", accessor: (r) => requesterName(r.requested_by_teacher_id) },
     { header: "Note", accessor: (r) => <span className="max-w-[220px] truncate inline-block align-bottom">{r.note || <span className="text-navy-200 italic">—</span>}</span> },
     {
       header: "Status",
@@ -115,8 +116,8 @@ export default function AdminRenewalRequestsPage() {
   return (
     <AdminLayout>
       <PageHeader
-        title="Renewal Requests"
-        description="Package renewals flagged by Performance Coaches. Acknowledge a request, then process the actual renewal from Add / Renew Student — it's marked Renewed automatically once that package is added."
+        title="PC & CC Renewal Requests"
+        description="Package renewals flagged by Performance Coaches and College Counsellors. Acknowledge a request, then process the actual renewal from Add / Renew Student — it's marked Renewed automatically once that package is added."
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
@@ -136,7 +137,7 @@ export default function AdminRenewalRequestsPage() {
 
       <Card className="p-4 mb-5">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <TextInput label="Search" placeholder="Student or coach…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <TextInput label="Search" placeholder="Student, coach or counsellor…" value={search} onChange={(e) => setSearch(e.target.value)} />
           <SelectInput
             label="Status"
             value={statusFilter}

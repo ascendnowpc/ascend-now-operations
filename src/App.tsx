@@ -9,6 +9,7 @@ import AdminOverviewPage from "./pages/admin/AdminOverviewPage";
 import AdminPcsPage from "./pages/admin/AdminPcsPage";
 import AdminCcsPage from "./pages/admin/AdminCcsPage";
 import AdminCcAssignmentsPage from "./pages/admin/AdminCcAssignmentsPage";
+import AdminCcDetailPage from "./pages/admin/AdminCcDetailPage";
 import AdminPcDetailPage from "./pages/admin/AdminPcDetailPage";
 import AdminUsersPage from "./pages/admin/AdminUsersPage";
 import AdminAdminsPage from "./pages/admin/AdminAdminsPage";
@@ -68,6 +69,7 @@ import StudentReportsPage from "./pages/student/StudentReportsPage";
 import StudentSessionsPage from "./pages/student/StudentSessionsPage";
 import StudentProfilePage from "./pages/student/StudentProfilePage";
 import StudentMyPcPage from "./pages/student/StudentMyPcPage";
+import StudentMyCcPage from "./pages/student/StudentMyCcPage";
 import StudentHomeworkPage from "./pages/student/StudentHomeworkPage";
 import StudentHomeworkAttemptPage from "./pages/student/StudentHomeworkAttemptPage";
 
@@ -146,6 +148,14 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <AdminCcsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/ccs/:id"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminCcDetailPage />
               </ProtectedRoute>
             }
           />
@@ -374,10 +384,10 @@ export default function App() {
           <Route
             path="/teacher/profile"
             element={
-              // Performance coaches use the merged /teacher/pc-profile
+              // Coaches and counsellors use the merged /teacher/pc-profile
               // instead (personal info + username/password + their public
               // profile all in one place).
-              <ProtectedRoute allowedRoles={["teacher", "college_counselor"]}>
+              <ProtectedRoute allowedRoles={["teacher"]}>
                 <TeacherProfilePage />
               </ProtectedRoute>
             }
@@ -385,7 +395,7 @@ export default function App() {
           <Route
             path="/teacher/pc-profile"
             element={
-              <ProtectedRoute allowedRoles={["performance_coach"]}>
+              <ProtectedRoute allowedRoles={["performance_coach", "college_counselor"]}>
                 <PcProfilePage />
               </ProtectedRoute>
             }
@@ -393,7 +403,7 @@ export default function App() {
           <Route
             path="/teacher/subjects"
             element={
-              <ProtectedRoute allowedRoles={["teacher", "performance_coach"]}>
+              <ProtectedRoute allowedRoles={["teacher", "performance_coach", "college_counselor"]}>
                 <TeacherSubjectsPage />
               </ProtectedRoute>
             }
@@ -433,7 +443,7 @@ export default function App() {
           <Route
             path="/teacher/student-logs"
             element={
-              <ProtectedRoute allowedRoles={["performance_coach"]}>
+              <ProtectedRoute allowedRoles={["performance_coach", "college_counselor"]}>
                 <TeacherStudentLogsPage />
               </ProtectedRoute>
             }
@@ -441,7 +451,7 @@ export default function App() {
           <Route
             path="/teacher/notes"
             element={
-              <ProtectedRoute allowedRoles={["teacher", "performance_coach"]}>
+              <ProtectedRoute allowedRoles={["teacher", "performance_coach", "college_counselor"]}>
                 <TeacherNotesPage />
               </ProtectedRoute>
             }
@@ -449,7 +459,7 @@ export default function App() {
           <Route
             path="/teacher/homework"
             element={
-              <ProtectedRoute allowedRoles={["teacher", "performance_coach"]}>
+              <ProtectedRoute allowedRoles={["teacher", "performance_coach", "college_counselor"]}>
                 <TeacherHomeworkPage />
               </ProtectedRoute>
             }
@@ -457,7 +467,7 @@ export default function App() {
           <Route
             path="/teacher/homework/:paperId"
             element={
-              <ProtectedRoute allowedRoles={["teacher", "performance_coach"]}>
+              <ProtectedRoute allowedRoles={["teacher", "performance_coach", "college_counselor"]}>
                 <TeacherHomeworkReviewPage />
               </ProtectedRoute>
             }
@@ -465,7 +475,7 @@ export default function App() {
           <Route
             path="/teacher/homework/:paperId/whole-paper"
             element={
-              <ProtectedRoute allowedRoles={["teacher", "performance_coach"]}>
+              <ProtectedRoute allowedRoles={["teacher", "performance_coach", "college_counselor"]}>
                 <TeacherWholePaperReviewPage />
               </ProtectedRoute>
             }
@@ -473,7 +483,7 @@ export default function App() {
           <Route
             path="/teacher/homework/:paperId/question/:questionId"
             element={
-              <ProtectedRoute allowedRoles={["teacher", "performance_coach"]}>
+              <ProtectedRoute allowedRoles={["teacher", "performance_coach", "college_counselor"]}>
                 <TeacherQuestionPhotoReviewPage />
               </ProtectedRoute>
             }
@@ -481,18 +491,20 @@ export default function App() {
           <Route
             path="/teacher/students"
             element={
-              <ProtectedRoute allowedRoles={["performance_coach"]}>
+              <ProtectedRoute allowedRoles={["performance_coach", "college_counselor"]}>
                 <TeacherStudentsPage />
               </ProtectedRoute>
             }
           />
           {/* A College Counsellor's roster. Separate from /teacher/students
               (the PC roster) because the two are different assignment tables
-              and a counsellor doesn't get the coach's student-detail view. */}
+              with different lifecycles. Open to a performance_coach too, since
+              users.role carries only one hat and someone who is both a PC and
+              a CC logs in as the coach. */}
           <Route
             path="/teacher/cc-students"
             element={
-              <ProtectedRoute allowedRoles={["college_counselor"]}>
+              <ProtectedRoute allowedRoles={["college_counselor", "performance_coach"]}>
                 <TeacherCcStudentsPage />
               </ProtectedRoute>
             }
@@ -500,7 +512,7 @@ export default function App() {
           <Route
             path="/teacher/students/:id"
             element={
-              <ProtectedRoute allowedRoles={["performance_coach"]}>
+              <ProtectedRoute allowedRoles={["performance_coach", "college_counselor"]}>
                 <TeacherStudentDetailPage />
               </ProtectedRoute>
             }
@@ -508,7 +520,7 @@ export default function App() {
           <Route
             path="/teacher/renewal-requests"
             element={
-              <ProtectedRoute allowedRoles={["performance_coach"]}>
+              <ProtectedRoute allowedRoles={["performance_coach", "college_counselor"]}>
                 <TeacherRenewalRequestsPage />
               </ProtectedRoute>
             }
@@ -516,7 +528,7 @@ export default function App() {
           <Route
             path="/teacher/coordinator-logs"
             element={
-              <ProtectedRoute allowedRoles={["performance_coach"]}>
+              <ProtectedRoute allowedRoles={["performance_coach", "college_counselor"]}>
                 <TeacherCoordinatorLogsPage />
               </ProtectedRoute>
             }
@@ -524,7 +536,7 @@ export default function App() {
           <Route
             path="/teacher/coordinator-logs/new"
             element={
-              <ProtectedRoute allowedRoles={["performance_coach"]}>
+              <ProtectedRoute allowedRoles={["performance_coach", "college_counselor"]}>
                 <TeacherCoordinatorLogFormPage />
               </ProtectedRoute>
             }
@@ -532,7 +544,7 @@ export default function App() {
           <Route
             path="/teacher/coordinator-logs/:id"
             element={
-              <ProtectedRoute allowedRoles={["performance_coach"]}>
+              <ProtectedRoute allowedRoles={["performance_coach", "college_counselor"]}>
                 <TeacherCoordinatorLogViewPage />
               </ProtectedRoute>
             }
@@ -548,7 +560,7 @@ export default function App() {
           <Route
             path="/teacher/hours"
             element={
-              <ProtectedRoute allowedRoles={["teacher", "performance_coach"]}>
+              <ProtectedRoute allowedRoles={["teacher", "performance_coach", "college_counselor"]}>
                 <TeacherHoursPage />
               </ProtectedRoute>
             }
@@ -609,6 +621,14 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["student"]}>
                 <StudentMyPcPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student/my-cc"
+            element={
+              <ProtectedRoute allowedRoles={["student"]}>
+                <StudentMyCcPage />
               </ProtectedRoute>
             }
           />

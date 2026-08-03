@@ -21,13 +21,45 @@ export function staffRoleFlags(
 }
 
 /**
- * The sidebar's role badge. PC wins when someone holds both, because it's the
- * richer panel — the CC roster still shows up as its own nav group.
+ * The sidebar's role badge, and the name of the coordinator nav section. PC
+ * wins when someone holds both — the CC roster still shows up as its own entry
+ * inside that section.
  */
 export function staffRoleLabel(flags: { isCoach: boolean; isCounsellor: boolean }): string {
   if (flags.isCoach) return "Performance Coach";
   if (flags.isCounsellor) return "College Counsellor";
   return "Teacher";
+}
+
+/**
+ * Whether this staff member gets the full coordinator panel — the sectioned
+ * sidebar with a roster, students' logs, the coordinator log and renewal
+ * requests — rather than the flat plain-teacher one.
+ *
+ * As of 2026-08-03 a College Counsellor sees everything a Performance Coach
+ * does (RLS widened to match in `20260808000000_cc_gets_pc_access.sql`), so
+ * either hat is enough.
+ */
+export function hasCoordinatorPanel(flags: { isCoach: boolean; isCounsellor: boolean }): boolean {
+  return flags.isCoach || flags.isCounsellor;
+}
+
+/**
+ * Where "My Students" points in the coordinator panel. The two rosters are
+ * different tables with different lifecycles (see `useCcAssignments`), so a
+ * coach lands on the PC roster and a counsellor on the CC one. Someone who is
+ * both gets the PC roster here and the CC roster as its own entry.
+ */
+export function myStudentsPath(flags: { isCoach: boolean; isCounsellor: boolean }): string {
+  return flags.isCoach ? "/teacher/students" : "/teacher/cc-students";
+}
+
+/**
+ * The coordinator-log nav label. One `coordinator_logs` table, but the person
+ * filling it in should see their own role's name on it.
+ */
+export function coordinatorLogLabel(flags: { isCoach: boolean; isCounsellor: boolean }): string {
+  return `${staffRoleLabel(flags)} Log`;
 }
 
 /**
@@ -48,16 +80,16 @@ export function loginRoleForStaff(flags: {
 }
 
 /**
- * Where the admin teacher form lands after a save. A PC has a detail page of
- * its own; a CC does not — their record is the plain teacher one — so a
- * counsellor goes back to the CC list instead.
+ * Where the admin teacher form lands after a save. Coaches and counsellors
+ * each have a detail page of their own; a plain teacher's record is the
+ * teacher one.
  */
 export function staffRecordPath(
   teacherId: string,
   flags: { isCoach: boolean; isCounsellor: boolean }
 ): string {
   if (flags.isCoach) return `/admin/pcs/${teacherId}`;
-  if (flags.isCounsellor) return "/admin/ccs";
+  if (flags.isCounsellor) return `/admin/ccs/${teacherId}`;
   return `/admin/teachers/${teacherId}`;
 }
 

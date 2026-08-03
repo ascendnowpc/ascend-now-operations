@@ -36,8 +36,9 @@ function exportCsv(ccs: Teacher[], usernameLookup: Map<string, string>) {
 
 // The "CC" page — same underlying teachers list as /admin/teachers, filtered
 // to college counsellors (is_college_counselor = true). Directly mirrors
-// AdminPcsPage; a row opens the plain teacher record, since a CC has no
-// separate public profile card the way a PC does.
+// AdminPcsPage, including the row click: a CC now has a detail page of their
+// own (/admin/ccs/:id) with their roster and the profile card their students
+// see on My CC.
 export default function AdminCcsPage() {
   const { teachers: rawTeachers, loading } = useTeachers();
   const { teachers: inactiveRaw, loading: inactiveLoading } = useInactiveTeachers();
@@ -165,7 +166,7 @@ export default function AdminCcsPage() {
           rows={filtered}
           getRowId={(t) => t.id}
           loading={loading}
-          onRowClick={(t) => navigate(`/admin/teachers/${t.id}`)}
+          onRowClick={(t) => navigate(`/admin/ccs/${t.id}`)}
         />
       )}
 
@@ -175,7 +176,7 @@ export default function AdminCcsPage() {
           rows={filteredInactive}
           getRowId={(t) => t.id}
           loading={inactiveLoading}
-          onRowClick={(t) => navigate(`/admin/teachers/${t.id}`)}
+          onRowClick={(t) => navigate(`/admin/ccs/${t.id}`)}
         />
       )}
     </AdminLayout>

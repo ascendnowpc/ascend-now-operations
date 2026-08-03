@@ -5,7 +5,13 @@ import { useAuth } from "../../context/AuthContext";
 import { useMyTeacherProfile } from "../../hooks/useMyTeacherProfile";
 import { teacherNeedsProfileCompletion } from "../../utils/profileCompletion";
 import { TeacherCompleteProfileGate } from "../../components/portal/TeacherCompleteProfileGate";
-import { staffRoleFlags, staffRoleLabel } from "../../utils/staffRole";
+import {
+  coordinatorLogLabel,
+  hasCoordinatorPanel,
+  myStudentsPath,
+  staffRoleFlags,
+  staffRoleLabel,
+} from "../../utils/staffRole";
 
 export function TeacherLayout({ children }: { children: ReactNode }) {
   const { profile } = useAuth();
@@ -35,45 +41,37 @@ export function TeacherLayout({ children }: { children: ReactNode }) {
     { label: "Notes", to: "/teacher/notes", icon: <IconNote /> },
   ];
 
-  // College Counselling is a narrow role: log sessions for the students
-  // assigned to you, and see who those are. Nothing else — no coordinator
-  // log, no renewal requests, no homework generator.
-  const ccNavSection: NavItem = {
-    label: "College Counsellor",
-    icon: <IconTeacher />,
-    children: [{ label: "My Students", to: "/teacher/cc-students", icon: <IconUsers /> }],
-  };
+  // A College Counsellor now sees everything a Performance Coach does, so the
+  // two share this one sectioned panel — only the roster link and the section
+  // label differ. Someone flagged as both gets both rosters.
+  const coordinatorNavItems: NavItem[] = [
+    // Sectioned like the admin sidebar: shared tabs in one group, the
+    // coordinator tabs in another, and My Profile standalone at the bottom.
+    { label: "General", icon: <IconClipboard />, children: sharedNavItems },
+    {
+      label: roleLabel,
+      icon: <IconTeacher />,
+      children: [
+        { label: "My Students", to: myStudentsPath({ isCoach, isCounsellor }), icon: <IconUsers /> },
+        ...(isCoach && isCounsellor
+          ? [{ label: "My CC Students", to: "/teacher/cc-students", icon: <IconUsers /> }]
+          : []),
+        { label: "Students' Logs", to: "/teacher/student-logs", icon: <IconClipboard /> },
+        { label: coordinatorLogLabel({ isCoach, isCounsellor }), to: "/teacher/coordinator-logs", icon: <IconCoordinatorLog /> },
+      ],
+    },
+    // Standalone rather than inside the section above: coaches and counsellors
+    // both file these now, so it isn't one role's tab any more.
+    { label: "PC & CC Renewal Requests", to: "/teacher/renewal-requests", icon: <IconBell /> },
+    // "My Profile" here covers their own account settings (username/password,
+    // personal info) AND the public profile card their assigned students see
+    // — merged from a separate "Coach Profile" tab 2026-07-24, see
+    // PcProfilePage.tsx.
+    { label: "My Profile", to: "/teacher/pc-profile", icon: <IconUser /> },
+  ];
 
-  const teacherNavItems: NavItem[] = isCoach
-    ? [
-        // Sectioned like the admin sidebar: shared tabs in one group, the
-        // strictly-PC tabs in another, and My Profile standalone at the bottom.
-        { label: "General", icon: <IconClipboard />, children: sharedNavItems },
-        {
-          label: "Performance Coach",
-          icon: <IconTeacher />,
-          children: [
-            { label: "My Students", to: "/teacher/students", icon: <IconUsers /> },
-            { label: "Students' Logs", to: "/teacher/student-logs", icon: <IconClipboard /> },
-            { label: "Performance Coach Log", to: "/teacher/coordinator-logs", icon: <IconCoordinatorLog /> },
-            { label: "Renewal Requests", to: "/teacher/renewal-requests", icon: <IconBell /> },
-          ],
-        },
-        // Someone flagged as both gets the CC roster as an extra section —
-        // users.role can only be one of the two, so the flags decide.
-        ...(isCounsellor ? [ccNavSection] : []),
-        // "My Profile" for a coach covers their own account settings
-        // (username/password, personal info) AND the public profile card
-        // their assigned students see — merged from a separate "Coach
-        // Profile" tab 2026-07-24, see PcProfilePage.tsx.
-        { label: "My Profile", to: "/teacher/pc-profile", icon: <IconUser /> },
-      ]
-    : isCounsellor
-    ? [
-        { label: "Session Logging", to: "/teacher/sessions", icon: <IconClipboard /> },
-        { label: "My Students", to: "/teacher/cc-students", icon: <IconUsers /> },
-        { label: "My Profile", to: "/teacher/profile", icon: <IconUser /> },
-      ]
+  const teacherNavItems: NavItem[] = hasCoordinatorPanel({ isCoach, isCounsellor })
+    ? coordinatorNavItems
     : [
         ...sharedNavItems,
         // Zoom Invoice upload — plain teachers only, not performance coaches

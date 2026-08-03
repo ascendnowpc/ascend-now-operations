@@ -119,6 +119,8 @@ export function PcProfileCard({
   profile,
   coachName,
   header,
+  roleTitle = "Performance Coach",
+  showClosingImage = true,
 }: {
   profile: PcProfile;
   coachName: string;
@@ -128,8 +130,15 @@ export function PcProfileCard({
   // default header (student/admin views); pass null to render no header at
   // all (the merged page renders its own header above this component).
   header?: React.ReactNode | null;
+  // The heading over the responsibilities timeline, and the fallback name.
+  // `pc_profiles` backs both roles, so a College Counsellor's card is this
+  // same component with "College Counsellor" here.
+  roleTitle?: string;
+  // The stock closing photo is part of the coach's card only — a counsellor's
+  // card ends after their content (see StudentMyCcPage).
+  showClosingImage?: boolean;
 }) {
-  const name = coachName || "Performance Coach";
+  const name = coachName || roleTitle;
   const achievements = profile.achievements ?? [];
   const responsibilities = profile.coach_responsibilities ?? [];
 
@@ -187,11 +196,11 @@ export function PcProfileCard({
         </div>
       )}
 
-      {/* ── Performance Coach responsibilities — timeline, no card chrome ── */}
+      {/* ── Responsibilities — timeline, no card chrome ── */}
       {responsibilities.length > 0 && (
         <div className="min-w-0">
           <div className="flex items-center justify-between gap-3 mb-5">
-            <h3 className="text-[17px] font-extrabold text-navy-700">Performance Coach</h3>
+            <h3 className="text-[17px] font-extrabold text-navy-700">{roleTitle}</h3>
             <span className="text-sky-500 font-bold tracking-[0.16em] text-[11px] uppercase shrink-0">Ascend Now</span>
           </div>
           <ResponsibilityTimeline entries={responsibilities} />
@@ -278,9 +287,11 @@ export function PcProfileCard({
       )}
 
       {/* —─ Closing image — sits at the very end of the profile —─ */}
-      <div className="rounded-2xl overflow-hidden">
-        <img src="/pcstudent.jpg" alt="" className="w-full h-auto object-cover" />
-      </div>
+      {showClosingImage && (
+        <div className="rounded-2xl overflow-hidden">
+          <img src="/pcstudent.jpg" alt="" className="w-full h-auto object-cover" />
+        </div>
+      )}
     </div>
   );
 }
@@ -324,13 +335,28 @@ export function PcEducationSidebar({ education }: { education: PcCardEntry[] }) 
 // to max-w-3xl before stopping (min-w-0 lets it shrink instead of
 // overflowing on a narrower screen). Below lg there's rarely room for both
 // side by side, so it stacks instead.
-export function PcProfileWithEducation({ profile, coachName }: { profile: PcProfile; coachName: string }) {
+export function PcProfileWithEducation({
+  profile,
+  coachName,
+  roleTitle,
+  showClosingImage,
+}: {
+  profile: PcProfile;
+  coachName: string;
+  roleTitle?: string;
+  showClosingImage?: boolean;
+}) {
   const education = profile.education ?? [];
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 lg:justify-center lg:items-start">
       <div className="max-w-3xl w-full mx-auto lg:mx-0 lg:flex-1 lg:min-w-0">
-        <PcProfileCard profile={profile} coachName={coachName} />
+        <PcProfileCard
+          profile={profile}
+          coachName={coachName}
+          roleTitle={roleTitle}
+          showClosingImage={showClosingImage}
+        />
       </div>
       {education.length > 0 && (
         <div className="w-full lg:w-96 lg:shrink-0">
