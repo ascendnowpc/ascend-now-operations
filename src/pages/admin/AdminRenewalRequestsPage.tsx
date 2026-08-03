@@ -116,7 +116,7 @@ export default function AdminRenewalRequestsPage() {
   return (
     <AdminLayout>
       <PageHeader
-        title="PC & CC Renewal Requests"
+        title="Renewal Requests"
         description="Package renewals flagged by Performance Coaches and College Counsellors. Acknowledge a request, then process the actual renewal from Add / Renew Student — it's marked Renewed automatically once that package is added."
       />
 
