@@ -14,7 +14,11 @@ import { useStudentPackages, PRESET_HOURS } from "../../hooks/useStudentPackages
 import { useBundlePoolSettings } from "../../hooks/useBundlePoolSettings";
 import { useMyTeacherProfile } from "../../hooks/useMyTeacherProfile";
 import { usePcAssignments } from "../../hooks/usePcAssignments";
+import { useCcAssignments } from "../../hooks/useCcAssignments";
 import { useStudents } from "../../hooks/useStudents";
+import { useAuth } from "../../context/AuthContext";
+import { loggableStudentIds } from "../../utils/ccAssignment";
+import { staffRoleFlags } from "../../utils/staffRole";
 import type { PackageRenewalStatus, Student, StudentPackage } from "../../types/database";
 
 // "unspecified" — the PC just wants to flag a renewal is needed, without
@@ -50,7 +54,9 @@ export default function TeacherRenewalRequestsPage() {
   const { fetchPackagesForStudent } = useStudentPackages();
   const { poolDefsByBundle } = useBundlePoolSettings();
   const { teacher } = useMyTeacherProfile();
+  const { profile } = useAuth();
   const { activeAssignments } = usePcAssignments();
+  const { activeAssignments: activeCcAssignmentRows } = useCcAssignments();
   const { students } = useStudents();
 
   const [rows, setRows] = useState<PackageRenewalRequestWithCourseType[]>([]);
@@ -80,9 +86,20 @@ export default function TeacherRenewalRequestsPage() {
     return () => { cancelled = true; };
   }, [adding, form.studentId, fetchPackagesForStudent]);
 
-  const myAssignedIds = new Set(
-    teacher ? activeAssignments.filter((a) => a.pc_teacher_id === teacher.id).map((a) => a.student_id) : []
-  );
+  // Coaches and counsellors both file renewals now, so the picker is the union
+  // of whichever rosters this person actually has — the same rule that decides
+  // who they may log a session against, and the same one the INSERT policy
+  // enforces via `is_my_assigned_student()`.
+  const { isCoach, isCounsellor } = staffRoleFlags(profile?.role, teacher);
+  const myAssignedIds =
+    loggableStudentIds({
+      isAdmin: false,
+      teacherId: teacher?.id ?? null,
+      isCoach,
+      isCounsellor,
+      activePcAssignments: activeAssignments,
+      activeCcAssignments: activeCcAssignmentRows,
+    }) ?? new Set<string>();
 
   async function load() {
     setLoading(true);
@@ -182,7 +199,7 @@ export default function TeacherRenewalRequestsPage() {
   return (
     <TeacherLayout>
       <PageHeader
-        title="Renewal Requests"
+        title="PC & CC Renewal Requests"
         description="Tell the admin when one of your students needs their package renewed."
         action={!adding ? <Button onClick={openAdd}>+ Request Renewal</Button> : undefined}
       />

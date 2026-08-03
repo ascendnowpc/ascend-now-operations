@@ -81,7 +81,6 @@ export function AdminLayout({ children }: { children: ReactNode }) {
         },
         { label: "PC Assignments", to: "/admin/pc-assignments", icon: <IconLink /> },
         { label: "PC's Log", to: "/admin/coordinator-logs", icon: <IconCoordinatorLog /> },
-        { label: "PC Renewal Requests", to: "/admin/renewal-requests", icon: <IconBell /> },
       ],
     },
     {
@@ -102,6 +101,9 @@ export function AdminLayout({ children }: { children: ReactNode }) {
         { label: "CC Assignments", to: "/admin/cc-assignments", icon: <IconLink /> },
       ],
     },
+    // Standalone rather than under Performance Coaches: counsellors file these
+    // too now, so the queue belongs to neither role's section.
+    { label: "PC & CC Renewal Requests", to: "/admin/renewal-requests", icon: <IconBell /> },
     { label: "Reports", to: "/admin/reports", icon: <IconBarChart /> },
     { label: "Analysis", to: "/admin/analysis", icon: <IconBarChart /> },
     {

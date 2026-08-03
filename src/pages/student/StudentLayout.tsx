@@ -3,11 +3,15 @@ import { DashboardShell } from "../../components/layout/DashboardShell";
 import { IconGrid, IconPackage, IconBarChart, IconClipboard, IconUser, IconPencil, IconTeacher } from "../../components/ui/icons";
 import { Spinner } from "../../components/ui/Spinner";
 import { useMyStudent } from "../../hooks/useMyStudent";
+import { useHasAssignedCc } from "../../hooks/useAssignedCcProfile";
 import { studentNeedsProfileCompletion } from "../../utils/profileCompletion";
 import { StudentCompleteProfileGate } from "../../components/portal/StudentCompleteProfileGate";
 
 export function StudentLayout({ children }: { children: ReactNode }) {
   const { student, loading, updateMyProfile } = useMyStudent();
+  // A CC is optional where a PC is the norm, so My CC only appears once the
+  // student actually has one — unlike My PC, which is always there.
+  const { hasCc } = useHasAssignedCc(student?.id);
   const navItems = [
     { label: "Overview", to: "/student/overview", icon: <IconGrid /> },
     { label: "Package Status", to: "/student/packages", icon: <IconPackage /> },
@@ -15,6 +19,7 @@ export function StudentLayout({ children }: { children: ReactNode }) {
     { label: "Session Logs", to: "/student/sessions", icon: <IconClipboard /> },
     { label: "My Homework", to: "/student/homework", icon: <IconPencil /> },
     { label: "My PC", to: "/student/my-pc", icon: <IconTeacher /> },
+    ...(hasCc ? [{ label: "My CC", to: "/student/my-cc", icon: <IconTeacher /> }] : []),
     { label: "Profile", to: "/student/profile", icon: <IconUser /> },
   ];
 
