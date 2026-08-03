@@ -1,13 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
-  CC_ASSIGNMENT_STATUSES,
   activeCcAssignments,
   canAssignStudentToCc,
   ccAssignmentSummary,
   ccCardMatchesQuery,
   ccForStudent,
-  ccRosterRowMatches,
-  ccRosterRows,
   isCcAssignmentActive,
   latestCcForStudent,
   loggableStudentIds,
@@ -29,12 +26,6 @@ function row(over: Partial<CcStudentAssignment> & { id: number }): CcStudentAssi
     ...over,
   };
 }
-
-describe("CC engagement states", () => {
-  it("offers active and completed only — a CC engagement is never 'on pause'", () => {
-    expect(CC_ASSIGNMENT_STATUSES).toEqual(["active", "completed"]);
-  });
-});
 
 describe("isCcAssignmentActive", () => {
   it("treats an open row as active", () => {
@@ -344,101 +335,5 @@ describe("ccCardMatchesQuery", () => {
     expect(
       ccCardMatchesQuery({ query: "grace", counsellor, assignments, studentLabel: () => null })
     ).toBe(false);
-  });
-});
-
-describe("ccRosterRows", () => {
-  const students = [
-    { id: "STU-1", first_name: "Grace", last_name: "Hopper" },
-    { id: "STU-2", first_name: "Alan", last_name: "Turing" },
-    { id: "STU-3", first_name: "Ada", last_name: "Byron" },
-  ];
-  const assignments = [
-    row({ id: 4, student_id: "STU-1", cc_teacher_id: "CC-1", assigned_at: "2026-07-01T00:00:00Z" }),
-    row({ id: 3, student_id: "STU-2", cc_teacher_id: "CC-1", status: "completed", unassigned_at: "2026-06-20T00:00:00Z", assigned_at: "2026-02-01T00:00:00Z" }),
-    row({ id: 2, student_id: "STU-3", cc_teacher_id: "CC-2" }),
-  ];
-
-  it("returns only this counsellor's engagements", () => {
-    expect(ccRosterRows(assignments, students, "CC-1").map((r) => r.studentId)).toEqual(["STU-1", "STU-2"]);
-  });
-
-  it("labels each row by the ENGAGEMENT's status, not the student's own", () => {
-    // The two are independent — a counsellor can be finished with a student
-    // who is still active — which is exactly why the shared admin list's
-    // student-status tabs were the wrong thing to show a CC.
-    const rows = ccRosterRows(assignments, students, "CC-1");
-    expect(rows.find((r) => r.studentId === "STU-1")?.status).toBe("active");
-    expect(rows.find((r) => r.studentId === "STU-2")?.status).toBe("completed");
-  });
-
-  it("joins the student's name onto the row", () => {
-    const [first] = ccRosterRows(assignments, students, "CC-1");
-    expect(first).toMatchObject({ assignmentId: 4, firstName: "Grace", lastName: "Hopper" });
-  });
-
-  it("carries both dates through, with unassignedAt null while live", () => {
-    const rows = ccRosterRows(assignments, students, "CC-1");
-    expect(rows[0].assignedAt).toBe("2026-07-01T00:00:00Z");
-    expect(rows[0].unassignedAt).toBeNull();
-    expect(rows[1].unassignedAt).toBe("2026-06-20T00:00:00Z");
-  });
-
-  it("drops an assignment whose student hasn't loaded rather than rendering a blank row", () => {
-    const orphan = [row({ id: 9, student_id: "STU-404", cc_teacher_id: "CC-1" })];
-    expect(ccRosterRows(orphan, students, "CC-1")).toEqual([]);
-  });
-
-  it("preserves the incoming assigned_at-desc order", () => {
-    expect(ccRosterRows(assignments, students, "CC-1").map((r) => r.assignmentId)).toEqual([4, 3]);
-  });
-
-  it("returns nothing for a counsellor with no engagements", () => {
-    expect(ccRosterRows(assignments, students, "CC-99")).toEqual([]);
-  });
-
-  it("returns nothing before the student list has loaded", () => {
-    // Guards the flicker this page used to have: half-arrived data must
-    // produce an empty roster, not a wrong one.
-    expect(ccRosterRows(assignments, [], "CC-1")).toEqual([]);
-  });
-
-  it("keeps two separate engagements with the same student as two rows", () => {
-    const twice = [
-      row({ id: 5, student_id: "STU-1", cc_teacher_id: "CC-1" }),
-      row({ id: 4, student_id: "STU-1", cc_teacher_id: "CC-1", status: "completed", unassigned_at: "2026-05-01T00:00:00Z" }),
-    ];
-    expect(ccRosterRows(twice, students, "CC-1").map((r) => r.assignmentId)).toEqual([5, 4]);
-  });
-});
-
-describe("ccRosterRowMatches", () => {
-  const r = {
-    assignmentId: 1,
-    studentId: "STU-1",
-    firstName: "Grace",
-    lastName: "Hopper",
-    status: "active" as const,
-    assignedAt: "2026-07-01T00:00:00Z",
-    unassignedAt: null,
-  };
-
-  it("matches everything on a blank query", () => {
-    expect(ccRosterRowMatches(r, "")).toBe(true);
-    expect(ccRosterRowMatches(r, "   ")).toBe(true);
-  });
-
-  it("matches first name, last name and id, case-insensitively", () => {
-    expect(ccRosterRowMatches(r, "grace")).toBe(true);
-    expect(ccRosterRowMatches(r, "HOPPER")).toBe(true);
-    expect(ccRosterRowMatches(r, "stu-1")).toBe(true);
-  });
-
-  it("matches a full name typed across the first/last boundary", () => {
-    expect(ccRosterRowMatches(r, "grace hopper")).toBe(true);
-  });
-
-  it("rejects a term that appears nowhere on the row", () => {
-    expect(ccRosterRowMatches(r, "turing")).toBe(false);
   });
 });

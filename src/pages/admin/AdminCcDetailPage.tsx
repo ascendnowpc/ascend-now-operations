@@ -5,19 +5,15 @@ import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Spinner } from "../../components/ui/Spinner";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
-import { DataTable, type ColumnDef } from "../../components/ui/DataTable";
 import { IconArrowLeft } from "../../components/ui/icons";
+import { StudentsListView } from "../../components/students/StudentsListView";
 import { PcProfileWithEducation } from "../../components/pc/PcProfileCard";
 import { PcProfileEditor } from "../../components/pc/PcProfileEditor";
 import { useCcAssignments } from "../../hooks/useCcAssignments";
 import { usePcProfile } from "../../hooks/usePcProfile";
 import { useStudents } from "../../hooks/useStudents";
 import { fetchTeacherById, deactivateTeacherById } from "../../hooks/useTeachers";
-import {
-  CC_ASSIGNMENT_STATUS_LABEL,
-  ccRosterRows,
-  type CcRosterRow,
-} from "../../utils/ccAssignment";
+import { myRosterStudentIds } from "../../utils/staffRoster";
 import type { Teacher } from "../../types/database";
 
 type Tab = "details" | "students" | "profile";
@@ -31,18 +27,12 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
-}
-
 // CC detail view opened from the CC list (/admin/ccs/:id) — the counsellor
-// counterpart of AdminPcDetailPage. "Students" is the counsellor's own roster
-// (engagements, with their own active/completed status — not the shared
-// StudentsListView, for the reasons in TeacherCcStudentsPage), and "Profile" is
-// where the admin writes the card the counsellor's students see on My CC.
-// There's no Report tab: PcAssignmentReport is built on pc_student_assignments.
+// counterpart of AdminPcDetailPage, and deliberately the same shape: "Students"
+// is the shared StudentsListView scoped to this counsellor's students (a row
+// opens the full student record), and "Profile" is where the admin writes the
+// card the counsellor's students see on My CC. There's no Report tab:
+// PcAssignmentReport is built on pc_student_assignments.
 export default function AdminCcDetailPage() {
   const { id } = useParams<{ id: string }>();
   const ccId = id!;
@@ -65,8 +55,19 @@ export default function AdminCcDetailPage() {
     });
   }, [id]);
 
-  const rosterRows = useMemo(
-    () => ccRosterRows(assignments, students, ccId),
+  // Same rule as the counsellor's own My Students page: live engagements plus
+  // the students they completed, who are unassigned by then but still belong
+  // to whoever saw them through.
+  const { visible: studentIdsForCc } = useMemo(
+    () =>
+      myRosterStudentIds({
+        teacherId: ccId,
+        isCoach: false,
+        isCounsellor: true,
+        pcAssignments: [],
+        ccAssignments: assignments,
+        students,
+      }),
     [assignments, students, ccId]
   );
 
@@ -97,19 +98,6 @@ export default function AdminCcDetailPage() {
     ["details", "Details"],
     ["students", "Students"],
     ["profile", "Profile"],
-  ];
-
-  const rosterColumns: ColumnDef<CcRosterRow>[] = [
-    {
-      header: "ID",
-      accessor: (r) => <span className="font-mono text-xs font-semibold text-sky-500">{r.studentId}</span>,
-      className: "whitespace-nowrap",
-    },
-    { header: "First name", accessor: (r) => r.firstName },
-    { header: "Last name", accessor: (r) => r.lastName },
-    { header: "Engagement", accessor: (r) => CC_ASSIGNMENT_STATUS_LABEL[r.status] },
-    { header: "Assigned", accessor: (r) => formatDate(r.assignedAt), className: "whitespace-nowrap" },
-    { header: "Completed", accessor: (r) => formatDate(r.unassignedAt), className: "whitespace-nowrap" },
   ];
 
   return (
@@ -201,11 +189,11 @@ export default function AdminCcDetailPage() {
       )}
 
       {tab === "students" && (
-        <DataTable
-          columns={rosterColumns}
-          rows={rosterRows}
-          getRowId={(r) => r.assignmentId}
-          onRowClick={(r) => navigate(`/admin/students/${r.studentId}`)}
+        <StudentsListView
+          title="Assigned students"
+          description={`Students assigned to ${ccName} as their College Counsellor.`}
+          allowedIds={studentIdsForCc}
+          detailPath={(sid) => `/admin/students/${sid}`}
           emptyMessage="No students are assigned to this counsellor yet."
         />
       )}

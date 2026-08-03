@@ -21,9 +21,8 @@ export function staffRoleFlags(
 }
 
 /**
- * The sidebar's role badge, and the name of the coordinator nav section. PC
- * wins when someone holds both — the CC roster still shows up as its own entry
- * inside that section.
+ * The sidebar's role badge — the one thing in the coordinator panel that still
+ * names the person's own role. PC wins when someone holds both.
  */
 export function staffRoleLabel(flags: { isCoach: boolean; isCounsellor: boolean }): string {
   if (flags.isCoach) return "Performance Coach";
@@ -33,33 +32,16 @@ export function staffRoleLabel(flags: { isCoach: boolean; isCounsellor: boolean 
 
 /**
  * Whether this staff member gets the full coordinator panel — the sectioned
- * sidebar with a roster, students' logs, the coordinator log and renewal
- * requests — rather than the flat plain-teacher one.
+ * sidebar with My Students, Students' Logs, the log and renewal requests —
+ * rather than the flat plain-teacher one.
  *
  * As of 2026-08-03 a College Counsellor sees everything a Performance Coach
  * does (RLS widened to match in `20260808000000_cc_gets_pc_access.sql`), so
- * either hat is enough.
+ * either hat is enough — and the panel itself is identical for both. There is
+ * no counsellor-specific tab, roster page or log.
  */
 export function hasCoordinatorPanel(flags: { isCoach: boolean; isCounsellor: boolean }): boolean {
   return flags.isCoach || flags.isCounsellor;
-}
-
-/**
- * Where "My Students" points in the coordinator panel. The two rosters are
- * different tables with different lifecycles (see `useCcAssignments`), so a
- * coach lands on the PC roster and a counsellor on the CC one. Someone who is
- * both gets the PC roster here and the CC roster as its own entry.
- */
-export function myStudentsPath(flags: { isCoach: boolean; isCounsellor: boolean }): string {
-  return flags.isCoach ? "/teacher/students" : "/teacher/cc-students";
-}
-
-/**
- * The coordinator-log nav label. One `coordinator_logs` table, but the person
- * filling it in should see their own role's name on it.
- */
-export function coordinatorLogLabel(flags: { isCoach: boolean; isCounsellor: boolean }): string {
-  return `${staffRoleLabel(flags)} Log`;
 }
 
 /**

@@ -1,10 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
-  coordinatorLogLabel,
   hasCoordinatorPanel,
   isPlainTeacher,
   loginRoleForStaff,
-  myStudentsPath,
   staffRecordPath,
   staffRoleFlags,
   staffRoleLabel,
@@ -141,29 +139,5 @@ describe("hasCoordinatorPanel", () => {
 
   it("leaves a plain teacher on the flat nav", () => {
     expect(hasCoordinatorPanel({ isCoach: false, isCounsellor: false })).toBe(false);
-  });
-});
-
-describe("myStudentsPath", () => {
-  it("sends a coach to the PC roster", () => {
-    expect(myStudentsPath({ isCoach: true, isCounsellor: false })).toBe("/teacher/students");
-  });
-
-  it("sends a counsellor to the CC roster — the two are different tables", () => {
-    expect(myStudentsPath({ isCoach: false, isCounsellor: true })).toBe("/teacher/cc-students");
-  });
-
-  it("sends someone who is both to the PC roster (the CC one gets its own entry)", () => {
-    expect(myStudentsPath({ isCoach: true, isCounsellor: true })).toBe("/teacher/students");
-  });
-});
-
-describe("coordinatorLogLabel", () => {
-  it("names the log after the coach", () => {
-    expect(coordinatorLogLabel({ isCoach: true, isCounsellor: false })).toBe("Performance Coach Log");
-  });
-
-  it("names the same log after the counsellor when that's the hat they wear", () => {
-    expect(coordinatorLogLabel({ isCoach: false, isCounsellor: true })).toBe("College Counsellor Log");
   });
 });
