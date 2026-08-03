@@ -18,6 +18,9 @@ import { useCurricula } from "../../hooks/useCurricula";
 import { useAllCurriculumGroups } from "../../hooks/useCurriculumGroups";
 import { useTeachers } from "../../hooks/useTeachers";
 import { usePcAssignments } from "../../hooks/usePcAssignments";
+import { useCcAssignments } from "../../hooks/useCcAssignments";
+import { staffRoleFlags } from "../../utils/staffRole";
+import { myRosterStudentIds } from "../../utils/staffRoster";
 import { supabase } from "../../lib/supabaseClient";
 import type { Subject, Teacher, PrimaryRelationshipOwner, CoordinatorLog, CoordinatorLogSubject } from "../../types/database";
 
@@ -103,7 +106,8 @@ export function CoordinatorLogFormView({
   const { curricula } = useCurricula();
   const { groups: allGroups } = useAllCurriculumGroups();
   const { teachers } = useTeachers();
-  const { activeAssignments, getPcForStudent } = usePcAssignments();
+  const { assignments: pcAssignments, getPcForStudent } = usePcAssignments();
+  const { assignments: ccAssignments } = useCcAssignments();
 
   const { activeOptions: primaryGoalOptions } = useCoordinatorLogOptions("primary_goal");
   const { activeOptions: progressStatusOptions } = useCoordinatorLogOptions("progress_status");
@@ -117,8 +121,18 @@ export function CoordinatorLogFormView({
   const activeCourseTypes = courseTypes.filter((c) => c.is_active);
   const activePcs = teachers.filter((t) => t.is_performance_coach && t.is_active);
 
+  // A counsellor writes into the same log as a coach, against their own
+  // roster — which lives in the other assignment table — so the student picker
+  // is the union of both, matching what `is_my_assigned_student()` will accept
+  // on insert. Live assignments only; an admin (undefined) picks anyone.
   const assignedStudentIds = role === "teacher" && currentTeacher
-    ? new Set(activeAssignments.filter((a) => a.pc_teacher_id === currentTeacher.id).map((a) => a.student_id))
+    ? myRosterStudentIds({
+        teacherId: currentTeacher.id,
+        ...staffRoleFlags(undefined, currentTeacher),
+        pcAssignments,
+        ccAssignments,
+        students: [],
+      }).active
     : undefined;
 
   // Owner is fixed to PC/CC for a Performance Coach; admins choose it.
