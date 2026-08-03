@@ -36,17 +36,19 @@ export function TeacherLayout({ children }: { children: ReactNode }) {
   ];
 
   // A College Counsellor sees exactly what a Performance Coach sees — same
-  // tabs, same pages, same single log. Nothing here branches on which of the
-  // two hats the person wears; the only role-dependent thing in the panel is
-  // the badge at the top of the shell. Their rosters differ, but that's
-  // handled inside the pages (both read the PC and CC assignment tables and
-  // show the union), not by giving a counsellor different navigation.
+  // tabs, same pages, same single log. The section is named after whichever
+  // hat the person wears, but that's the only thing that changes: the tabs
+  // inside it are identical, and "Performance Coach Log" keeps its name for
+  // both because there is one coordinator log, not one per role. Their
+  // rosters differ, but that's handled inside the pages (both read the PC and
+  // CC assignment tables and show the union), not by giving a counsellor
+  // different navigation.
   const coordinatorNavItems: NavItem[] = [
     // Sectioned like the admin sidebar: shared tabs in one group, the
     // coordinator tabs in another, and My Profile standalone at the bottom.
     { label: "General", icon: <IconClipboard />, children: sharedNavItems },
     {
-      label: "Performance Coach",
+      label: roleLabel,
       icon: <IconTeacher />,
       children: [
         { label: "My Students", to: "/teacher/students", icon: <IconUsers /> },
@@ -56,7 +58,7 @@ export function TeacherLayout({ children }: { children: ReactNode }) {
     },
     // Standalone rather than inside the section above: coaches and counsellors
     // both file these now, so it isn't one role's tab any more.
-    { label: "PC & CC Renewal Requests", to: "/teacher/renewal-requests", icon: <IconBell /> },
+    { label: "Renewal Requests", to: "/teacher/renewal-requests", icon: <IconBell /> },
     // "My Profile" here covers their own account settings (username/password,
     // personal info) AND the public profile card their assigned students see
     // — merged from a separate "Coach Profile" tab 2026-07-24, see

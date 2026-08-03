@@ -103,7 +103,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
     },
     // Standalone rather than under Performance Coaches: counsellors file these
     // too now, so the queue belongs to neither role's section.
-    { label: "PC & CC Renewal Requests", to: "/admin/renewal-requests", icon: <IconBell /> },
+    { label: "Renewal Requests", to: "/admin/renewal-requests", icon: <IconBell /> },
     { label: "Reports", to: "/admin/reports", icon: <IconBarChart /> },
     { label: "Analysis", to: "/admin/analysis", icon: <IconBarChart /> },
     {

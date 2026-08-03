@@ -199,7 +199,7 @@ export default function TeacherRenewalRequestsPage() {
   return (
     <TeacherLayout>
       <PageHeader
-        title="PC & CC Renewal Requests"
+        title="Renewal Requests"
         description="Tell the admin when one of your students needs their package renewed."
         action={!adding ? <Button onClick={openAdd}>+ Request Renewal</Button> : undefined}
       />
