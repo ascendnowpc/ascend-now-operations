@@ -5,13 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useMyTeacherProfile } from "../../hooks/useMyTeacherProfile";
 import { teacherNeedsProfileCompletion } from "../../utils/profileCompletion";
 import { TeacherCompleteProfileGate } from "../../components/portal/TeacherCompleteProfileGate";
-import {
-  coordinatorLogLabel,
-  hasCoordinatorPanel,
-  myStudentsPath,
-  staffRoleFlags,
-  staffRoleLabel,
-} from "../../utils/staffRole";
+import { hasCoordinatorPanel, staffRoleFlags, staffRoleLabel } from "../../utils/staffRole";
 
 export function TeacherLayout({ children }: { children: ReactNode }) {
   const { profile } = useAuth();
@@ -41,23 +35,23 @@ export function TeacherLayout({ children }: { children: ReactNode }) {
     { label: "Notes", to: "/teacher/notes", icon: <IconNote /> },
   ];
 
-  // A College Counsellor now sees everything a Performance Coach does, so the
-  // two share this one sectioned panel — only the roster link and the section
-  // label differ. Someone flagged as both gets both rosters.
+  // A College Counsellor sees exactly what a Performance Coach sees — same
+  // tabs, same pages, same single log. Nothing here branches on which of the
+  // two hats the person wears; the only role-dependent thing in the panel is
+  // the badge at the top of the shell. Their rosters differ, but that's
+  // handled inside the pages (both read the PC and CC assignment tables and
+  // show the union), not by giving a counsellor different navigation.
   const coordinatorNavItems: NavItem[] = [
     // Sectioned like the admin sidebar: shared tabs in one group, the
     // coordinator tabs in another, and My Profile standalone at the bottom.
     { label: "General", icon: <IconClipboard />, children: sharedNavItems },
     {
-      label: roleLabel,
+      label: "Performance Coach",
       icon: <IconTeacher />,
       children: [
-        { label: "My Students", to: myStudentsPath({ isCoach, isCounsellor }), icon: <IconUsers /> },
-        ...(isCoach && isCounsellor
-          ? [{ label: "My CC Students", to: "/teacher/cc-students", icon: <IconUsers /> }]
-          : []),
+        { label: "My Students", to: "/teacher/students", icon: <IconUsers /> },
         { label: "Students' Logs", to: "/teacher/student-logs", icon: <IconClipboard /> },
-        { label: coordinatorLogLabel({ isCoach, isCounsellor }), to: "/teacher/coordinator-logs", icon: <IconCoordinatorLog /> },
+        { label: "Performance Coach Log", to: "/teacher/coordinator-logs", icon: <IconCoordinatorLog /> },
       ],
     },
     // Standalone rather than inside the section above: coaches and counsellors

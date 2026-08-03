@@ -50,7 +50,6 @@ import TeacherHomeworkReviewPage from "./pages/teacher/TeacherHomeworkReviewPage
 import TeacherWholePaperReviewPage from "./pages/teacher/TeacherWholePaperReviewPage";
 import TeacherQuestionPhotoReviewPage from "./pages/teacher/TeacherQuestionPhotoReviewPage";
 import TeacherStudentsPage from "./pages/teacher/TeacherStudentsPage";
-import TeacherCcStudentsPage from "./pages/teacher/TeacherCcStudentsPage";
 import TeacherStudentDetailPage from "./pages/teacher/TeacherStudentDetailPage";
 import TeacherHoursPage from "./pages/teacher/TeacherHoursPage";
 import TeacherInvoicesPage from "./pages/teacher/TeacherInvoicesPage";
@@ -493,19 +492,6 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["performance_coach", "college_counselor"]}>
                 <TeacherStudentsPage />
-              </ProtectedRoute>
-            }
-          />
-          {/* A College Counsellor's roster. Separate from /teacher/students
-              (the PC roster) because the two are different assignment tables
-              with different lifecycles. Open to a performance_coach too, since
-              users.role carries only one hat and someone who is both a PC and
-              a CC logs in as the coach. */}
-          <Route
-            path="/teacher/cc-students"
-            element={
-              <ProtectedRoute allowedRoles={["college_counselor", "performance_coach"]}>
-                <TeacherCcStudentsPage />
               </ProtectedRoute>
             }
           />
