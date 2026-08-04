@@ -1,126 +1,25 @@
 import type { ReactNode } from "react";
-import { DashboardShell, type NavItem } from "../../components/layout/DashboardShell";
-import { IconUsers, IconTeacher, IconClipboard, IconTag, IconPackage, IconBarChart, IconDownload, IconPlus, IconBell, IconCoordinatorLog, IconUser, IconGrid, IconSettings } from "../../components/ui/icons";
-
-function IconLink() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-    </svg>
-  );
-}
-
-// Book icon for Teacher Subjects and Subjects Library nav items
-function IconBook() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-    </svg>
-  );
-}
+import { DashboardShell } from "../../components/layout/DashboardShell";
+import { ADMIN_NAV_ITEMS } from "./adminNav";
+import { useMyAdminProfile } from "../../hooks/useMyAdminProfile";
+import { adminNeedsProfileCompletion } from "../../utils/profileCompletion";
+import { AdminCompleteProfileGate } from "../../components/portal/AdminCompleteProfileGate";
 
 export function AdminLayout({ children }: { children: ReactNode }) {
-  const adminNavItems: NavItem[] = [
-    { label: "Overview", to: "/admin/overview", icon: <IconGrid /> },
-    {
-      label: "Roles",
-      icon: <IconUsers />,
-      children: [
-        { label: "Users", to: "/admin/users", icon: <IconUsers /> },
-        { label: "Admins", to: "/admin/admins", icon: <IconUsers /> },
-      ],
-    },
-    {
-      label: "Students",
-      icon: <IconUsers />,
-      children: [
-        { label: "Students", to: "/admin/students", icon: <IconUsers /> },
-        { label: "Add / Renew Student", to: "/admin/students/enroll", icon: <IconPlus /> },
-        { label: "Enrollments", to: "/admin/enrollments", icon: <IconClipboard /> },
-        { label: "Learner's actual hours", to: "/admin/packages", icon: <IconPackage /> },
-      ],
-    },
-    {
-      label: "Teachers",
-      icon: <IconTeacher />,
-      children: [
-        {
-          label: "Teachers",
-          to: "/admin/teachers",
-          icon: <IconTeacher />,
-          // /admin/teachers/new doubles as "add performance coach" via ?pc=1
-          // and "add college counsellor" via ?cc=1 (see AdminPcsPage /
-          // AdminCcsPage / AdminTeacherFormPage) — don't claim either here.
-          isActive: (loc) => {
-            const params = new URLSearchParams(loc.search);
-            return (
-              loc.pathname.startsWith("/admin/teachers") &&
-              params.get("pc") !== "1" &&
-              params.get("cc") !== "1"
-            );
-          },
-        },
-        { label: "Teacher Subjects", to: "/admin/teacher-subjects", icon: <IconBook /> },
-        { label: "Teacher's Hours", to: "/admin/teacher-hours", icon: <IconBarChart /> },
-        { label: "Zoom Invoices", to: "/admin/zoom-invoices", icon: <IconDownload /> },
-      ],
-    },
-    {
-      label: "Performance Coaches",
-      icon: <IconTeacher />,
-      children: [
-        {
-          label: "PC",
-          to: "/admin/pcs",
-          icon: <IconTeacher />,
-          isActive: (loc) =>
-            loc.pathname.startsWith("/admin/pcs") ||
-            (loc.pathname === "/admin/teachers/new" && new URLSearchParams(loc.search).get("pc") === "1"),
-        },
-        { label: "PC Assignments", to: "/admin/pc-assignments", icon: <IconLink /> },
-        { label: "PC's Log", to: "/admin/coordinator-logs", icon: <IconCoordinatorLog /> },
-      ],
-    },
-    {
-      label: "College Counsellors",
-      icon: <IconTeacher />,
-      children: [
-        {
-          label: "CC",
-          to: "/admin/ccs",
-          icon: <IconTeacher />,
-          // /admin/teachers/new doubles as "add college counsellor" via ?cc=1,
-          // the same way ?pc=1 works above — claim it here so the nav
-          // highlights this section rather than Teachers.
-          isActive: (loc) =>
-            loc.pathname.startsWith("/admin/ccs") ||
-            (loc.pathname === "/admin/teachers/new" && new URLSearchParams(loc.search).get("cc") === "1"),
-        },
-        { label: "CC Assignments", to: "/admin/cc-assignments", icon: <IconLink /> },
-      ],
-    },
-    // Standalone rather than under Performance Coaches: counsellors file these
-    // too now, so the queue belongs to neither role's section.
-    { label: "Renewal Requests", to: "/admin/renewal-requests", icon: <IconBell /> },
-    { label: "Reports", to: "/admin/reports", icon: <IconBarChart /> },
-    { label: "Analysis", to: "/admin/analysis", icon: <IconBarChart /> },
-    {
-      label: "Configuration",
-      icon: <IconSettings />,
-      children: [
-        { label: "Settings", to: "/admin/settings", icon: <IconSettings /> },
-        { label: "Program Types", to: "/admin/program-types", icon: <IconTag /> },
-        { label: "Subjects", to: "/admin/subjects", icon: <IconBook /> },
-      ],
-    },
-    { label: "Session Logs", to: "/admin/session-logs", icon: <IconClipboard /> },
-    { label: "My Profile", to: "/admin/profile", icon: <IconUser /> },
-  ];
+  const { admin, loading, updateMyProfile } = useMyAdminProfile();
 
+  // Mandatory first-login gate — an admin's phone and country are never
+  // captured when another admin creates the account, so this is where they
+  // get collected, blocking every other admin route until filled in. Mirrors
+  // the identical gates in TeacherLayout.tsx / StudentLayout.tsx.
+  if (!loading && admin && adminNeedsProfileCompletion(admin)) {
+    return <AdminCompleteProfileGate admin={admin} updateMyProfile={updateMyProfile} />;
+  }
+
+  // Sidebar lives in adminNav.tsx so AdminOverviewPage can render the exact
+  // same list as cards.
   return (
-    <DashboardShell navItems={adminNavItems} roleLabel="Admin">
+    <DashboardShell navItems={ADMIN_NAV_ITEMS} roleLabel="Admin">
       {children}
     </DashboardShell>
   );

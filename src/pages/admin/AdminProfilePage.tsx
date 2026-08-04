@@ -3,10 +3,12 @@ import { AdminLayout } from "./AdminLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
-import { TextInput } from "../../components/ui/Input";
+import { TextInput, SelectInput, PhoneInput } from "../../components/ui/Input";
 import { Spinner } from "../../components/ui/Spinner";
 import { useAuth } from "../../context/AuthContext";
-import { useAdmins } from "../../hooks/useAdmins";
+import { useMyAdminProfile } from "../../hooks/useMyAdminProfile";
+import { COUNTRY_OPTIONS, COUNTRY_DIAL_CODES } from "../../data/countries";
+import { splitPhoneNumber, joinPhoneNumber } from "../../utils/phoneNumber";
 
 function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -17,22 +19,26 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-// An admin's account details live entirely on the public.users row
-// (full_name / username / email) plus the Auth password — there is no
-// separate admin profile table (the `admins` row is just a marker). So this
-// page is a slimmer version of TeacherProfilePage: name + email inline edit,
-// plus username and password change cards.
+// An admin's name/email/username live on the public.users row and the
+// password on Auth; the `admins` row adds their mnemonic id plus the contact
+// fields users has no room for — phone number and country (both collected at
+// first login by AdminCompleteProfileGate, and editable here afterwards). So
+// this page is a slimmer version of TeacherProfilePage: personal information
+// inline edit, plus username and password change cards.
 export default function AdminProfilePage() {
   const { profile, loading, updateFullName, updateEmail, updateUsername, updatePassword } = useAuth();
-  // The `admins` marker row carries this admin's own mnemonic id (e.g.
-  // ARIS26-2) — `profile.id` is the auth uuid, not the id used anywhere else.
-  const { admins } = useAdmins();
-  const adminId = admins.find((a) => a.user_id === profile?.id)?.id ?? null;
+  // The `admins` row carries this admin's own mnemonic id (e.g. ARIS26-2) —
+  // `profile.id` is the auth uuid, not the id used anywhere else.
+  const { admin, updateMyProfile } = useMyAdminProfile();
+  const adminId = admin?.id ?? null;
 
   // ── Personal information ──
   const [editing, setEditing] = useState(false);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [country, setCountry] = useState("");
+  const [dialCode, setDialCode] = useState("+1");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -40,6 +46,10 @@ export default function AdminProfilePage() {
     if (!profile) return;
     setFullName(profile.full_name ?? "");
     setEmail(profile.email ?? "");
+    setCountry(admin?.country ?? "");
+    const phone = splitPhoneNumber(admin?.phone_number);
+    setDialCode(phone.dialCode);
+    setPhoneNumber(phone.number);
     setSaveError(null);
     setEditing(true);
   }
@@ -67,6 +77,14 @@ export default function AdminProfilePage() {
 
     if (fullName.trim() !== (profile?.full_name ?? "")) {
       const { error } = await updateFullName(fullName.trim());
+      if (error) { setSaving(false); setSaveError(error); return; }
+    }
+
+    if (admin) {
+      const { error } = await updateMyProfile({
+        country: country || null,
+        phone_number: joinPhoneNumber(dialCode, phoneNumber),
+      });
       if (error) { setSaving(false); setSaveError(error); return; }
     }
 
@@ -162,11 +180,32 @@ export default function AdminProfilePage() {
                 <InfoRow label="ID" value={adminId} />
                 <InfoRow label="Full name" value={profile.full_name} />
                 <InfoRow label="Email" value={profile.email} />
+                <InfoRow label="Phone" value={admin?.phone_number} />
+                <InfoRow label="Country" value={admin?.country} />
               </dl>
             ) : (
               <div className="flex flex-col gap-4">
                 <TextInput label="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
                 <TextInput label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <SelectInput
+                  label="Country"
+                  placeholder="Select a country"
+                  value={country}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setCountry(next);
+                    const dial = COUNTRY_DIAL_CODES[next];
+                    if (dial) setDialCode(dial);
+                  }}
+                  options={COUNTRY_OPTIONS}
+                />
+                <PhoneInput
+                  label="Phone number"
+                  dialCode={dialCode}
+                  onDialCodeChange={setDialCode}
+                  phoneNumber={phoneNumber}
+                  onPhoneNumberChange={setPhoneNumber}
+                />
 
                 {saveError && (
                   <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{saveError}</p>
