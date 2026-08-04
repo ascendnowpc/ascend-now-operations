@@ -6,6 +6,7 @@ import {
   type ReportSection, type ReportRawLine, type PackageMeta,
 } from "../utils/buildInvoicePdf";
 import { isNonBillableNoShow } from "../utils/noShow";
+import { packageReportPeriod } from "../utils/reportPeriod";
 
 export type InvoiceLineItemWithNames = InvoiceLineItem & {
   teachers: { first_name: string; last_name: string | null } | null;
@@ -218,19 +219,20 @@ export function useInvoices() {
       return { data: null, error: "No sessions found for the selected package(s)." };
     }
 
-    const dates = matching.map((s) => s.session_date).sort();
-    // Start date = the day the package was added (earliest package created_at
-    // for a multi-pool bundle); end date = the last session logged for it.
-    // Falls back to the first session date if no created_at was supplied.
-    const createdDates = opts.packages
-      .map((p) => (p.createdAt ? p.createdAt.slice(0, 10) : null))
-      .filter((d): d is string => d != null)
-      .sort();
-    const periodStart = createdDates[0] ?? dates[0];
+    // Start date = the day the package was added (earliest created_at for a
+    // multi-pool bundle), clamped so it can never fall after the first session
+    // the report covers; end date = the last session logged for it. See
+    // packageReportPeriod().
+    const period = packageReportPeriod(
+      opts.packages
+        .map((p) => (p.createdAt ? p.createdAt.slice(0, 10) : null))
+        .filter((d): d is string => d != null),
+      matching.map((s) => s.session_date)
+    )!; // non-null: `matching` is empty-checked above
     const result = await insertInvoiceFromSessions({
       studentId: opts.studentId,
-      periodStart,
-      periodEnd: dates[dates.length - 1],
+      periodStart: period.start,
+      periodEnd: period.end,
       generatedByUserId: opts.generatedByUserId,
       sessionList: matching,
       packageIds: opts.packages.map((p) => p.id),
@@ -407,13 +409,16 @@ export function useInvoices() {
         if (s.student_package_id != null) return packageIds.has(s.student_package_id);
         return courseTypeIds.has(s.course_type_id);
       });
-      const dates = sessionList.map((s) => s.session_date).sort();
-      const createdDates = pkgs
-        .map((p) => (p.createdAt ? p.createdAt.slice(0, 10) : null))
-        .filter((d): d is string => d != null)
-        .sort();
-      periodStart = createdDates[0] ?? dates[0] ?? inv.period_start;
-      periodEnd = dates[dates.length - 1] ?? inv.period_end;
+      const period = packageReportPeriod(
+        pkgs
+          .map((p) => (p.createdAt ? p.createdAt.slice(0, 10) : null))
+          .filter((d): d is string => d != null),
+        sessionList.map((s) => s.session_date)
+      );
+      // No matching sessions left: keep the stored period rather than
+      // inventing one.
+      periodStart = period?.start ?? inv.period_start;
+      periodEnd = period?.end ?? inv.period_end;
     } else {
       // Date-range invoice: fixed period, re-pull sessions within it.
       sessionList = allSessions.filter(
