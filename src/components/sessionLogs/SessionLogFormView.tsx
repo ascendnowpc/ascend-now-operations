@@ -293,11 +293,16 @@ export function SessionLogFormView({
   // as "Assigned by") still get a picker, since there's no assignment to read
   // it from. Rules in src/utils/sessionCoordinator.ts (unit-tested).
   const assignedPcId = selectedStudent ? getPcForStudent(selectedStudent.id) : null;
-  const coordinatorField = coordinatorFieldState({
+  // A demo lesson may be logged against a typed-in name for someone not in the
+  // database yet, who therefore has no coach to derive — that case gets the
+  // full coach list instead.
+  const coordinatorOpts = {
     studentInvolved,
     selectedStudentId: selectedStudent?.id ?? null,
     assignedPcId,
-  });
+    studentRecordOptional: isDemoLesson,
+  };
+  const coordinatorField = coordinatorFieldState(coordinatorOpts);
   const coordinatorName = (teacherId: string) => {
     const t = teachers.find((x) => x.id === teacherId);
     return t ? `${t.first_name} ${t.last_name ?? ""}`.trim() : teacherId;
@@ -522,11 +527,13 @@ export function SessionLogFormView({
   // before a student, or switching students afterwards, left the session filed
   // against a coach who wasn't the student's. Clearing to "" when there's no
   // student (or no assignment) is deliberate — a stale id from the previous
-  // student must not survive the switch.
+  // student must not survive the switch. `null` means the field is a picker,
+  // so the value is the user's to set and must be left alone.
+  const derivedCoordinator = derivedCoordinatorId(coordinatorOpts);
   useEffect(() => {
-    const next = derivedCoordinatorId({ studentInvolved, assignedPcId });
-    setCoordinatorId((prev) => (prev === next ? prev : next));
-  }, [studentInvolved, assignedPcId]);
+    if (derivedCoordinator === null) return;
+    setCoordinatorId((prev) => (prev === derivedCoordinator ? prev : derivedCoordinator));
+  }, [derivedCoordinator]);
 
   useEffect(() => {
     if (!isEditing || !id) return;
@@ -1291,6 +1298,20 @@ export function SessionLogFormView({
                   : <span className="text-navy-400">{coordinatorField.hint}</span>}
               </div>
             </div>
+          ) : studentInvolved ? (
+            // Demo lesson for someone not in the database — no assignment to
+            // derive from, so the whole coach list is offered. Optional: the
+            // coach may not be settled at demo time.
+            <SelectInput
+              label="Performance Coach"
+              placeholder="Select a Performance Coach"
+              value={coordinatorId}
+              onChange={(e) => setCoordinatorId(e.target.value)}
+              options={coaches.map((t) => ({
+                value: String(t.id),
+                label: `${t.first_name} ${t.last_name ?? ""}`.trim(),
+              }))}
+            />
           ) : (
             <SelectInput
               label="Assigned by"

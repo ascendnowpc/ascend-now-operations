@@ -12,18 +12,14 @@ import { supabase } from "../../lib/supabaseClient";
 import { StudentStatusBadge, StudentStatusMenu } from "./StudentStatusControls";
 import { STUDENT_STATUSES, STUDENT_STATUS_LABEL, normalizeStudentStatus } from "../../utils/studentStatus";
 import type { PackageTopup, Student, StudentPackage, StudentStatus } from "../../types/database";
+import {
+  packageStatusOf,
+  PACKAGE_STATUS_LABEL,
+  type PackageStatus,
+} from "../../utils/packageStatus";
 
 type PackageWithTopups = StudentPackage & { package_topups: PackageTopup[] };
 
-type PackageStatus = "none" | "under_50" | "between_50_75" | "between_75_100" | "completed_or_over";
-
-const PACKAGE_STATUS_LABEL: Record<PackageStatus, string> = {
-  none: "No package",
-  under_50: "< 50% used (healthy)",
-  between_50_75: "50–75% used",
-  between_75_100: "75–99% used (running low)",
-  completed_or_over: "100%+ used (done / exceeded)",
-};
 
 /**
  * Shared students-list view used by BOTH the admin (`/admin/students`) and
@@ -132,27 +128,13 @@ export function StudentsListView({
 
   useEffect(() => { loadPackageData(); }, [loadPackageData]);
 
-  // Worst-case (highest) usage percentage across all of a student's packages.
+  // Worst-case usage across each thing the student actually bought — a bundle
+  // (Foundation Program / All-In-One) counts as ONE unit with its pools summed,
+  // not as one package per pool. Rules + tests in utils/packageStatus.ts.
   const packageStatusByStudent = useMemo(() => {
     const map = new Map<string, PackageStatus>();
     for (const student of students) {
-      const pkgs = packagesByStudent.get(student.id) ?? [];
-      if (pkgs.length === 0) {
-        map.set(student.id, "none");
-        continue;
-      }
-      let maxPct = 0;
-      for (const pkg of pkgs) {
-        const used = pkg.hours_used;
-        const pct = pkg.total_hours_purchased > 0 ? used / pkg.total_hours_purchased : 0;
-        if (pct > maxPct) maxPct = pct;
-      }
-      let status: PackageStatus;
-      if (maxPct >= 1) status = "completed_or_over";
-      else if (maxPct >= 0.75) status = "between_75_100";
-      else if (maxPct >= 0.5) status = "between_50_75";
-      else status = "under_50";
-      map.set(student.id, status);
+      map.set(student.id, packageStatusOf(packagesByStudent.get(student.id) ?? []));
     }
     return map;
   }, [students, packagesByStudent]);
