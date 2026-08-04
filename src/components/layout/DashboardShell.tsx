@@ -25,9 +25,8 @@ interface DashboardShellProps {
   roleLabel: string;
   /**
    * The logged-in user's own profile page. It used to be a "My Profile" nav
-   * tab in every role's sidebar; it now hangs off the identity block at the
-   * bottom instead (the name/email is the link, with a Profile button beside
-   * Sign out), so each layout has to say where its role's profile lives.
+   * tab in every role's sidebar; the footer's name/email block is the link to
+   * it now, so each layout has to say where its role's profile lives.
    */
   profileTo: string;
 }
@@ -48,10 +47,10 @@ function IconX() {
   );
 }
 
-/** Sized for the footer's Profile button, smaller than the nav icons. */
+/** The footer's profile mark — smaller than the nav icons, since it sits inside a chip. */
 function IconUserSmall() {
   return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+    <svg className="w-4 h-4 block" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
     </svg>
   );
@@ -181,27 +180,24 @@ export function DashboardShell({ navItems, children, roleLabel, profileTo }: Das
         <Link
           to={profileTo}
           onClick={() => setSidebarOpen(false)}
-          className="block -mx-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/10"
+          className="flex items-center gap-2.5 -mx-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/10"
         >
-          <p className="text-sm font-semibold truncate">{profile?.full_name ?? profile?.username}</p>
-          <p className="text-xs text-navy-200 truncate">{profile?.email}</p>
-        </Link>
-        <div className="mt-3 flex items-center gap-3">
-          <Link
-            to={profileTo}
-            onClick={() => setSidebarOpen(false)}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-white/20"
-          >
+          <span className="shrink-0 rounded-full bg-white/10 p-1.5">
             <IconUserSmall />
-            Profile
-          </Link>
-          <button
-            onClick={signOut}
-            className="text-sm font-medium text-lime-300 hover:text-lime-400"
-          >
-            Sign out
-          </button>
-        </div>
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold truncate">
+              {profile?.full_name ?? profile?.username}
+            </span>
+            <span className="block text-xs text-navy-200 truncate">{profile?.email}</span>
+          </span>
+        </Link>
+        <button
+          onClick={signOut}
+          className="mt-3 text-sm font-medium text-lime-300 hover:text-lime-400"
+        >
+          Sign out
+        </button>
       </div>
     </>
   );
