@@ -23,6 +23,13 @@ interface DashboardShellProps {
   navItems: NavItem[];
   children: ReactNode;
   roleLabel: string;
+  /**
+   * The logged-in user's own profile page. It used to be a "My Profile" nav
+   * tab in every role's sidebar; it now hangs off the identity block at the
+   * bottom instead (the name/email is the link, with a Profile button beside
+   * Sign out), so each layout has to say where its role's profile lives.
+   */
+  profileTo: string;
 }
 
 function IconMenu() {
@@ -37,6 +44,15 @@ function IconX() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  );
+}
+
+/** Sized for the footer's Profile button, smaller than the nav icons. */
+function IconUserSmall() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
     </svg>
   );
 }
@@ -130,7 +146,7 @@ function NavGroup({ item, onNavigate }: { item: NavItem; onNavigate: () => void 
   );
 }
 
-export function DashboardShell({ navItems, children, roleLabel }: DashboardShellProps) {
+export function DashboardShell({ navItems, children, roleLabel, profileTo }: DashboardShellProps) {
   const { profile, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -162,14 +178,30 @@ export function DashboardShell({ navItems, children, roleLabel }: DashboardShell
       </nav>
 
       <div className="px-4 py-4 border-t border-white/10">
-        <p className="text-sm font-semibold truncate">{profile?.full_name ?? profile?.username}</p>
-        <p className="text-xs text-navy-200 truncate">{profile?.email}</p>
-        <button
-          onClick={signOut}
-          className="mt-3 text-sm font-medium text-lime-300 hover:text-lime-400"
+        <Link
+          to={profileTo}
+          onClick={() => setSidebarOpen(false)}
+          className="block -mx-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/10"
         >
-          Sign out
-        </button>
+          <p className="text-sm font-semibold truncate">{profile?.full_name ?? profile?.username}</p>
+          <p className="text-xs text-navy-200 truncate">{profile?.email}</p>
+        </Link>
+        <div className="mt-3 flex items-center gap-3">
+          <Link
+            to={profileTo}
+            onClick={() => setSidebarOpen(false)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-white/20"
+          >
+            <IconUserSmall />
+            Profile
+          </Link>
+          <button
+            onClick={signOut}
+            className="text-sm font-medium text-lime-300 hover:text-lime-400"
+          >
+            Sign out
+          </button>
+        </div>
       </div>
     </>
   );

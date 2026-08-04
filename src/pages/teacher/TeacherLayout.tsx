@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 import { DashboardShell, type NavItem } from "../../components/layout/DashboardShell";
-import { IconUser, IconBook, IconClipboard, IconUsers, IconBarChart, IconDownload, IconPencil, IconBell, IconCoordinatorLog, IconNote, IconTeacher } from "../../components/ui/icons";
+import { IconBook, IconClipboard, IconUsers, IconBarChart, IconDownload, IconPencil, IconBell, IconCoordinatorLog, IconNote, IconTeacher } from "../../components/ui/icons";
 import { useAuth } from "../../context/AuthContext";
 import { useMyTeacherProfile } from "../../hooks/useMyTeacherProfile";
 import { teacherNeedsProfileCompletion } from "../../utils/profileCompletion";
 import { TeacherCompleteProfileGate } from "../../components/portal/TeacherCompleteProfileGate";
-import { hasCoordinatorPanel, staffRoleFlags, staffRoleLabel } from "../../utils/staffRole";
+import { hasCoordinatorPanel, staffProfilePath, staffRoleFlags, staffRoleLabel } from "../../utils/staffRole";
 
 export function TeacherLayout({ children }: { children: ReactNode }) {
   const { profile } = useAuth();
@@ -59,11 +59,6 @@ export function TeacherLayout({ children }: { children: ReactNode }) {
     // Standalone rather than inside the section above: coaches and counsellors
     // both file these now, so it isn't one role's tab any more.
     { label: "Renewal Requests", to: "/teacher/renewal-requests", icon: <IconBell /> },
-    // "My Profile" here covers their own account settings (username/password,
-    // personal info) AND the public profile card their assigned students see
-    // — merged from a separate "Coach Profile" tab 2026-07-24, see
-    // PcProfilePage.tsx.
-    { label: "My Profile", to: "/teacher/pc-profile", icon: <IconUser /> },
   ];
 
   const teacherNavItems: NavItem[] = hasCoordinatorPanel({ isCoach, isCounsellor })
@@ -73,14 +68,20 @@ export function TeacherLayout({ children }: { children: ReactNode }) {
         // Zoom Invoice upload — plain teachers only, not performance coaches
         // (removed from the PC panel 2026-07-10).
         { label: "Invoices", to: "/teacher/invoices", icon: <IconDownload /> },
-        // "My Profile" now covers what used to be a separate "Settings"
-        // page too (username/password change) — merged 2026-07-05, see
-        // TeacherProfilePage.tsx.
-        { label: "My Profile", to: "/teacher/profile", icon: <IconUser /> },
       ];
 
+  // Neither sidebar carries a "My Profile" tab any more — the profile page is
+  // reached from the footer's name/email link and Profile button. Which page
+  // that is still depends on the panel shape: a coach/counsellor's merged
+  // /teacher/pc-profile (personal info + account settings + their read-only
+  // public card, PcProfilePage.tsx) vs a plain teacher's /teacher/profile
+  // (personal info + account settings, TeacherProfilePage.tsx).
   return (
-    <DashboardShell navItems={teacherNavItems} roleLabel={roleLabel}>
+    <DashboardShell
+      navItems={teacherNavItems}
+      roleLabel={roleLabel}
+      profileTo={staffProfilePath({ isCoach, isCounsellor })}
+    >
       {children}
     </DashboardShell>
   );

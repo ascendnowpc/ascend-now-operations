@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { DashboardShell } from "../../components/layout/DashboardShell";
-import { IconGrid, IconPackage, IconBarChart, IconClipboard, IconUser, IconPencil, IconTeacher } from "../../components/ui/icons";
+import { IconGrid, IconPackage, IconBarChart, IconClipboard, IconPencil, IconTeacher } from "../../components/ui/icons";
 import { Spinner } from "../../components/ui/Spinner";
 import { useMyStudent } from "../../hooks/useMyStudent";
 import { useHasAssignedCc } from "../../hooks/useAssignedCcProfile";
@@ -20,7 +20,7 @@ export function StudentLayout({ children }: { children: ReactNode }) {
     { label: "My Homework", to: "/student/homework", icon: <IconPencil /> },
     { label: "My PC", to: "/student/my-pc", icon: <IconTeacher /> },
     ...(hasCc ? [{ label: "My CC", to: "/student/my-cc", icon: <IconTeacher /> }] : []),
-    { label: "Profile", to: "/student/profile", icon: <IconUser /> },
+    // Profile isn't a tab — it hangs off the sidebar footer's identity block.
   ];
 
   // Mandatory first-login gate — admin never requires phone/graduation
@@ -36,7 +36,7 @@ export function StudentLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <DashboardShell navItems={navItems} roleLabel="Student">
+    <DashboardShell navItems={navItems} roleLabel="Student" profileTo="/student/profile">
       {loading ? (
         <div className="flex items-center justify-center py-24">
           <Spinner size={32} />

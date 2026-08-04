@@ -45,6 +45,20 @@ export function hasCoordinatorPanel(flags: { isCoach: boolean; isCounsellor: boo
 }
 
 /**
+ * Where a logged-in staff member's own profile lives. Coaches and counsellors
+ * share the merged coach page (`/teacher/pc-profile`, personal info + account
+ * settings + their read-only public card); a plain teacher gets
+ * `/teacher/profile`.
+ *
+ * This is the sidebar footer's profile link now that "My Profile" is no longer
+ * a nav tab, so it has to answer the same question the panel shape does —
+ * hence it keys off `hasCoordinatorPanel`, not the flags directly.
+ */
+export function staffProfilePath(flags: { isCoach: boolean; isCounsellor: boolean }): string {
+  return hasCoordinatorPanel(flags) ? "/teacher/pc-profile" : "/teacher/profile";
+}
+
+/**
  * The single `users.role` to give a new staff account.
  *
  * Mirrored by the `create-teacher-with-user` edge function, which can't import
