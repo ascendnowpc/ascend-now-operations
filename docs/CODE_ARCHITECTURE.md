@@ -2,6 +2,10 @@
 
 **A file-level map of the codebase: what each layer is responsible for, which file talks to which, and how data actually moves from a click to a database row and back.**
 
+> **Word version:** `docs/Ascend-Now-Code-Architecture.docx`, generated from this file. After editing this document, regenerate it with
+> `NODE_PATH=./node_modules node docs/md2docx.cjs docs/CODE_ARCHITECTURE.md docs/Ascend-Now-Code-Architecture.docx`
+> so the two don't drift.
+
 This document is about **code structure**, not features. For what the system does, see [`README.md`](../README.md). For the exact database schema, see [`db/docs/VERIFIED_DATABASE_STATE.md`](../db/docs/VERIFIED_DATABASE_STATE.md). For a narrated walkthrough of the business flows, see [`SYSTEM_WORKFLOW.md`](../SYSTEM_WORKFLOW.md).
 
 ---
