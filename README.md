@@ -5,6 +5,8 @@ This document is the single source of truth for what has been built, how it's st
 
 **Database schema has moved.** This file used to embed the full database schema inline, which went stale (it described a 6-table design from June 23, while the live database has since grown to 26 tables). The schema now lives in one place only — **[`db/docs/VERIFIED_DATABASE_STATE.md`](./db/docs/VERIFIED_DATABASE_STATE.md)**, regenerated directly from the live Supabase project rather than from migration files or memory. Section 2 below is now a high-level summary; treat that file as authoritative for exact columns/constraints/policies.
 
+**Working on the code?** **[`docs/CODE_ARCHITECTURE.md`](./docs/CODE_ARCHITECTURE.md)** is the file-level map of the codebase — what each layer is responsible for, which file talks to which, the page → view → hook pattern, the two paths to the backend (direct PostgREST vs edge functions), where the Gemini prompts live, and five end-to-end data-flow traces. Start there if you want to know *how the code is put together* rather than what it does.
+
 **New to the system?** **[`SYSTEM_WORKFLOW.md`](./SYSTEM_WORKFLOW.md)** is a plain-language, step-by-step walkthrough script for demoing/explaining the whole thing to someone — how the first admin gets bootstrapped, how teachers/coaches/students get created, how a session log turns into hour deductions/notifications/invoices, and how the homework generator works end to end. Start there if you want the narrative version instead of the reference tables below.
 
 ---
