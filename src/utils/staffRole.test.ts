@@ -3,6 +3,7 @@ import {
   hasCoordinatorPanel,
   isPlainTeacher,
   loginRoleForStaff,
+  staffProfilePath,
   staffRecordPath,
   staffRoleFlags,
   staffRoleLabel,
@@ -103,6 +104,35 @@ describe("staffRecordPath", () => {
 
   it("prefers the coach detail page for someone who is both", () => {
     expect(staffRecordPath("RANW26-3", { isCoach: true, isCounsellor: true })).toBe("/admin/pcs/RANW26-3");
+  });
+});
+
+describe("staffProfilePath", () => {
+  it("sends a coach to the merged coach profile page", () => {
+    expect(staffProfilePath({ isCoach: true, isCounsellor: false })).toBe("/teacher/pc-profile");
+  });
+
+  it("sends a counsellor to the same coach profile page, since they share the panel", () => {
+    expect(staffProfilePath({ isCoach: false, isCounsellor: true })).toBe("/teacher/pc-profile");
+  });
+
+  it("sends someone holding both hats to the coach profile page once, not twice", () => {
+    expect(staffProfilePath({ isCoach: true, isCounsellor: true })).toBe("/teacher/pc-profile");
+  });
+
+  it("sends a plain teacher to the plain teacher profile page", () => {
+    expect(staffProfilePath({ isCoach: false, isCounsellor: false })).toBe("/teacher/profile");
+  });
+
+  it("follows the panel shape, so the footer link never points at a page the role can't open", () => {
+    for (const flags of [
+      { isCoach: false, isCounsellor: false },
+      { isCoach: true, isCounsellor: false },
+      { isCoach: false, isCounsellor: true },
+      { isCoach: true, isCounsellor: true },
+    ]) {
+      expect(staffProfilePath(flags) === "/teacher/pc-profile").toBe(hasCoordinatorPanel(flags));
+    }
   });
 });
 

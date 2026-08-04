@@ -87,8 +87,11 @@ describe("the real admin sidebar", () => {
       "Reports",
       "Analysis",
       "Session Logs",
-      "My Profile",
     ]);
+  });
+
+  it("has no profile tab — /admin/profile is reached from the sidebar footer instead", () => {
+    expect(adminOverviewPaths(overview)).not.toContain("/admin/profile");
   });
 
   it("keeps the sidebar's sections, in sidebar order", () => {

@@ -19,7 +19,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   // Sidebar lives in adminNav.tsx so AdminOverviewPage can render the exact
   // same list as cards.
   return (
-    <DashboardShell navItems={ADMIN_NAV_ITEMS} roleLabel="Admin">
+    <DashboardShell navItems={ADMIN_NAV_ITEMS} roleLabel="Admin" profileTo="/admin/profile">
       {children}
     </DashboardShell>
   );

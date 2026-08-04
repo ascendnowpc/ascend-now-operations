@@ -10,7 +10,6 @@ import {
   IconPlus,
   IconBell,
   IconCoordinatorLog,
-  IconUser,
   IconGrid,
   IconSettings,
   IconBook,
@@ -116,5 +115,7 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
     ],
   },
   { label: "Session Logs", to: "/admin/session-logs", icon: <IconClipboard /> },
-  { label: "My Profile", to: "/admin/profile", icon: <IconUser /> },
+  // No "My Profile" item: /admin/profile is reached from the sidebar footer's
+  // name/email link and Profile button (DashboardShell), not a nav tab — so it
+  // is no card on Overview either.
 ];
