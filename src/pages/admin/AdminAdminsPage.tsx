@@ -1,22 +1,20 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { AdminLayout } from "./AdminLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { DataTable, type ColumnDef } from "../../components/ui/DataTable";
 import { Button } from "../../components/ui/Button";
-import { TextInput, SelectInput, PhoneInput } from "../../components/ui/Input";
+import { TextInput } from "../../components/ui/Input";
 import { Card } from "../../components/ui/Card";
 import { IconPlus } from "../../components/ui/icons";
 import { useUsers } from "../../hooks/useUsers";
 import { useAdmins } from "../../hooks/useAdmins";
-import { invokeEdgeFunction, describeFunctionError } from "../../lib/edgeFunctions";
-import { COUNTRY_OPTIONS, COUNTRY_DIAL_CODES } from "../../data/countries";
 import type { AppUser } from "../../types/database";
 
 type AdminRow = AppUser & { admin_id: string | null; admin_phone: string | null; admin_country: string | null };
 
 export default function AdminAdminsPage() {
-  const { users, loading, refetch } = useUsers();
+  const { users, loading } = useUsers();
   const { admins: adminRecords } = useAdmins();
   const navigate = useNavigate();
 
@@ -59,88 +57,13 @@ export default function AdminAdminsPage() {
     setStatusFilter("");
   }
 
-  const [showForm, setShowForm] = useState(false);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [country, setCountry] = useState("");
-  const [dialCode, setDialCode] = useState("+1");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
-  // Track whether the user has manually overridden the auto-filled values
-  const usernameManualRef = useRef(false);
-  const passwordManualRef = useRef(false);
-
-  // Auto-fill username from email (unless manually overridden)
-  useEffect(() => {
-    if (usernameManualRef.current) return;
-    const derived = email.split("@")[0].replace(/[^a-zA-Z0-9._-]/g, "");
-    setUsername(derived);
-  }, [email]);
-
-  // Auto-fill password from first name (unless manually overridden)
-  useEffect(() => {
-    if (passwordManualRef.current) return;
-    if (firstName.trim()) setPassword(`${firstName.trim().toLowerCase()}@ascendnow`);
-  }, [firstName]);
-
-  function resetForm() {
-    setFirstName("");
-    setLastName("");
-    setEmail("");
-    setCountry("");
-    setDialCode("+1");
-    setPhoneNumber("");
-    setUsername("");
-    setPassword("");
-    usernameManualRef.current = false;
-    passwordManualRef.current = false;
-    setError(null);
-  }
+  // A create/edit on the form route redirects back here with its result.
+  const notice = (useLocation().state as { notice?: string } | null)?.notice ?? null;
 
   // Editing an admin lives on its own route (AdminAdminFormPage), the same
   // way teachers are edited at /admin/teachers/:id/edit.
   function openEdit(admin: AdminRow) {
     navigate(`/admin/admins/${admin.id}/edit`);
-  }
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
-    setSuccess(null);
-
-    const { data, error: invokeErr } = await invokeEdgeFunction<{ data: { id: number } }>(
-      "create-admin-with-user",
-      {
-        body: {
-          username,
-          email,
-          password,
-          first_name: firstName,
-          last_name: lastName,
-          country: country || null,
-          phone_number: phoneNumber.trim() ? `${dialCode} ${phoneNumber.trim()}` : null,
-        },
-      }
-    );
-    setSaving(false);
-
-    const resultError = invokeErr ? await describeFunctionError(invokeErr) : (data as { error?: string } | null)?.error;
-    if (resultError) {
-      setError(resultError);
-      return;
-    }
-
-    setSuccess(`Admin account created for ${firstName}${lastName ? " " + lastName : ""}. Their login details were emailed to ${email}.`);
-    resetForm();
-    setShowForm(false);
-    refetch();
   }
 
   const columns: ColumnDef<AdminRow>[] = [
@@ -168,129 +91,18 @@ export default function AdminAdminsPage() {
     <AdminLayout>
       <PageHeader
         title="Admins"
-        description="Everyone with admin access to the platform. Add a new admin and create their login account in one step."
+        description="Everyone with admin access to the platform."
         action={
-          <Button
-            onClick={() => {
-              setShowForm((v) => !v);
-              setSuccess(null);
-              if (showForm) resetForm();
-            }}
-            className="flex items-center gap-2"
-          >
-            <IconPlus /> {showForm ? "Cancel" : "Add admin"}
+          <Button onClick={() => navigate("/admin/admins/new")} className="flex items-center gap-2">
+            <IconPlus /> Add admin
           </Button>
         }
       />
 
-      {success && (
+      {notice && (
         <p className="text-sm text-lime-700 bg-lime-50 border border-lime-100 rounded-lg px-3 py-2 mb-4">
-          {success}
+          {notice}
         </p>
-      )}
-
-      {showForm && (
-        <Card className="p-6 max-w-2xl mb-6">
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4">
-              <TextInput
-                label="First name"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                required
-              />
-              <TextInput
-                label="Last name"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                required
-              />
-            </div>
-
-            <SelectInput
-              label="Country"
-              placeholder="Select a country"
-              value={country}
-              onChange={(e) => {
-                const next = e.target.value;
-                setCountry(next);
-                const dial = COUNTRY_DIAL_CODES[next];
-                if (dial) setDialCode(dial);
-              }}
-              options={COUNTRY_OPTIONS}
-            />
-
-            <div className="grid grid-cols-2 gap-4">
-              <TextInput
-                label="Email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-              <PhoneInput
-                label="Phone number"
-                dialCode={dialCode}
-                onDialCodeChange={setDialCode}
-                phoneNumber={phoneNumber}
-                onPhoneNumberChange={setPhoneNumber}
-              />
-            </div>
-
-            <hr className="border-navy-50 my-1" />
-            <p className="text-sm font-semibold text-navy-700">
-              Login account
-              <span className="text-xs font-normal text-navy-300 ml-2">
-                Auto-filled from name &amp; email — you can still edit
-              </span>
-            </p>
-            <div className="grid grid-cols-2 gap-4">
-              <TextInput
-                label="Username"
-                value={username}
-                onChange={(e) => {
-                  usernameManualRef.current = true;
-                  setUsername(e.target.value);
-                }}
-                required
-                placeholder="e.g. john.doe"
-              />
-              <TextInput
-                label="Password"
-                type="text"
-                value={password}
-                onChange={(e) => {
-                  passwordManualRef.current = true;
-                  setPassword(e.target.value);
-                }}
-                required
-                placeholder="Minimum 6 characters"
-              />
-            </div>
-
-            {error && (
-              <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                {error}
-              </p>
-            )}
-
-            <div className="flex gap-3 mt-2">
-              <Button type="submit" disabled={saving}>
-                {saving ? "Creating…" : "Create admin"}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  setShowForm(false);
-                  resetForm();
-                }}
-              >
-                Cancel
-              </Button>
-            </div>
-          </form>
-        </Card>
       )}
 
       <Card className="p-4 mb-6">

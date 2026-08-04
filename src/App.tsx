@@ -112,6 +112,14 @@ export default function App() {
             }
           />
           <Route
+            path="/admin/admins/new"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminAdminFormPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/admin/admins/:userId/edit"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>

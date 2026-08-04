@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { buildAdminOverview, adminOverviewPaths, type AdminNavShape } from "./adminOverview";
+import {
+  buildAdminOverview,
+  adminOverviewPaths,
+  overviewAccent,
+  type AdminNavShape,
+} from "./adminOverview";
 import { ADMIN_NAV_ITEMS } from "../pages/admin/adminNav";
 
 const NAV: AdminNavShape[] = [
@@ -95,5 +100,24 @@ describe("the real admin sidebar", () => {
       "College Counsellors",
       "Configuration",
     ]);
+  });
+});
+
+describe("overviewAccent", () => {
+  it("gives each sidebar section its own accent", () => {
+    expect(overviewAccent("Roles").chip).not.toBe(overviewAccent("Students").chip);
+  });
+
+  it("falls back to a neutral tile for a section with no accent defined", () => {
+    const fallback = overviewAccent("A Brand New Section");
+    expect(fallback.chip).toBeTruthy();
+    expect(fallback.ring).toBeTruthy();
+  });
+
+  it("gives every real sidebar section a defined accent", () => {
+    const neutral = overviewAccent("__no_such_section__");
+    for (const { group } of buildAdminOverview(ADMIN_NAV_ITEMS).sections) {
+      expect(overviewAccent(group.label)).not.toEqual(neutral);
+    }
   });
 });

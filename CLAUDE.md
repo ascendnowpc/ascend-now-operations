@@ -4,6 +4,29 @@
 
 Don't add explanatory or instructional microcopy to the UI unless it's asked for. No "click a row for its sessions", "tap to expand", "no report needed" style hints — a clickable row should show it's clickable through hover/cursor affordances, not a text label. Section headings and labels should be as short as possible ("By subject", not "By subject · click a row for its sessions"). When in doubt, leave the text out; the user consistently prefers a clean, uncluttered interface over descriptive prose.
 
+## Forms get their own route — never an inline panel
+
+Add/edit forms live on their own page at their own URL, not as a panel that
+expands inside the list page. `/admin/admins` lists admins; `/admin/admins/new`
+adds one; `/admin/admins/:userId/edit` edits one — the same shape
+`/admin/teachers`, `/admin/teachers/new` and `/admin/teachers/:id/edit` already
+use. So:
+
+- A "+ Add X" header action **navigates**; it never toggles a `showForm` state.
+- A row's Edit action **navigates**; it never opens an inline editor.
+- Save and Cancel both navigate back to the list. A result message the list
+  should show is passed as router state (`navigate(list, { state: { notice } })`)
+  and rendered there.
+- Route naming: `/…/new` to create, `/…/:id/edit` to edit. Use whichever id the
+  underlying rows are actually linked by, and say which one it is in a comment
+  when it isn't the obvious one (admins route on the auth user id, not the
+  mnemonic `admins.id`).
+
+The point is that every form is linkable, back-button-able, and reloadable, and
+that list pages stay list pages. When you touch a page that still has an inline
+form, move it out to a route rather than extending it in place. Then update the
+route table in `README.md` §3, per the doc-sync rules below.
+
 ## Add unit tests with every feature
 
 Every feature or bug fix must ship with unit tests. Run `npm test` (Vitest, `vitest run`) before you consider a change done — a change that leaves the suite red isn't finished.

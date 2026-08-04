@@ -54,6 +54,71 @@ export function buildAdminOverview<T extends AdminNavShape>(
   return { sections, standalone };
 }
 
+// Per-section accent classes for the Overview tiles, keyed by the sidebar
+// group's label. A group with no entry falls back to the neutral navy tile
+// rather than rendering unstyled, so adding a sidebar group never breaks the
+// page — it just looks plain until an accent is added here.
+export interface OverviewAccent {
+  /** Icon chip. */
+  chip: string;
+  /** Tile while its section is open. */
+  open: string;
+  /** Tile hover state while closed. */
+  hover: string;
+  /** Focus ring. */
+  ring: string;
+}
+
+const ACCENTS: Record<string, OverviewAccent> = {
+  Roles: {
+    chip: "bg-lime-100 text-lime-700",
+    open: "border-lime-400 bg-lime-50/40",
+    hover: "hover:border-lime-300 hover:bg-lime-50/40",
+    ring: "focus:ring-lime-300",
+  },
+  Students: {
+    chip: "bg-sky-100 text-sky-700",
+    open: "border-sky-400 bg-sky-50/40",
+    hover: "hover:border-sky-300 hover:bg-sky-50/40",
+    ring: "focus:ring-sky-300",
+  },
+  Teachers: {
+    chip: "bg-green-100 text-green-700",
+    open: "border-green-400 bg-green-50/40",
+    hover: "hover:border-green-300 hover:bg-green-50/40",
+    ring: "focus:ring-green-300",
+  },
+  "Performance Coaches": {
+    chip: "bg-orange-100 text-orange-700",
+    open: "border-orange-400 bg-orange-50/40",
+    hover: "hover:border-orange-300 hover:bg-orange-50/40",
+    ring: "focus:ring-orange-300",
+  },
+  "College Counsellors": {
+    chip: "bg-violet-100 text-violet-700",
+    open: "border-violet-400 bg-violet-50/40",
+    hover: "hover:border-violet-300 hover:bg-violet-50/40",
+    ring: "focus:ring-violet-300",
+  },
+  Configuration: {
+    chip: "bg-navy-100 text-navy-600",
+    open: "border-navy-400 bg-navy-50/60",
+    hover: "hover:border-navy-300 hover:bg-navy-50/60",
+    ring: "focus:ring-navy-300",
+  },
+};
+
+const NEUTRAL_ACCENT: OverviewAccent = {
+  chip: "bg-navy-50 text-navy-600",
+  open: "border-navy-400 bg-navy-50/60",
+  hover: "hover:border-navy-300 hover:bg-navy-50/60",
+  ring: "focus:ring-navy-300",
+};
+
+export function overviewAccent(label: string): OverviewAccent {
+  return ACCENTS[label] ?? NEUTRAL_ACCENT;
+}
+
 /**
  * Every route the Overview page links to, sections first then standalones.
  * Used by the test that asserts Overview covers the whole sidebar.
