@@ -1,8 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { studentNeedsProfileCompletion, teacherNeedsProfileCompletion } from "./profileCompletion";
+import {
+  studentNeedsProfileCompletion,
+  teacherNeedsProfileCompletion,
+  adminNeedsProfileCompletion,
+} from "./profileCompletion";
 
 type StudentFields = Parameters<typeof studentNeedsProfileCompletion>[0];
 type TeacherFields = Parameters<typeof teacherNeedsProfileCompletion>[0];
+type AdminFields = Parameters<typeof adminNeedsProfileCompletion>[0];
 
 const completeStudent: StudentFields = {
   phone_number: "+91 90000 00000",
@@ -59,5 +64,27 @@ describe("teacherNeedsProfileCompletion", () => {
 
   it("treats an empty string as missing", () => {
     expect(teacherNeedsProfileCompletion({ ...completeTeacher, phone_number: "" })).toBe(true);
+  });
+});
+
+const completeAdmin: AdminFields = {
+  phone_number: "+1 555 0100",
+  country: "United States",
+};
+
+describe("adminNeedsProfileCompletion", () => {
+  it("does not prompt an admin whose phone and country are filled in", () => {
+    expect(adminNeedsProfileCompletion(completeAdmin)).toBe(false);
+  });
+
+  it.each(Object.keys(completeAdmin) as (keyof AdminFields)[])(
+    "prompts when %s is missing",
+    (field) => {
+      expect(adminNeedsProfileCompletion({ ...completeAdmin, [field]: null })).toBe(true);
+    }
+  );
+
+  it("treats an empty string as missing", () => {
+    expect(adminNeedsProfileCompletion({ ...completeAdmin, phone_number: "" })).toBe(true);
   });
 });

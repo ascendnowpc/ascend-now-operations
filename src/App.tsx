@@ -13,6 +13,7 @@ import AdminCcDetailPage from "./pages/admin/AdminCcDetailPage";
 import AdminPcDetailPage from "./pages/admin/AdminPcDetailPage";
 import AdminUsersPage from "./pages/admin/AdminUsersPage";
 import AdminAdminsPage from "./pages/admin/AdminAdminsPage";
+import AdminAdminFormPage from "./pages/admin/AdminAdminFormPage";
 import AdminProfilePage from "./pages/admin/AdminProfilePage";
 import AdminTeachersPage from "./pages/admin/AdminTeachersPage";
 import AdminStudentsPage from "./pages/admin/AdminStudentsPage";
@@ -107,6 +108,14 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <AdminAdminsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/admins/:userId/edit"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminAdminFormPage />
               </ProtectedRoute>
             }
           />

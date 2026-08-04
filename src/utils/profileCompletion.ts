@@ -1,4 +1,4 @@
-import type { Student, Teacher } from "../types/database";
+import type { Admin, Student, Teacher } from "../types/database";
 
 // A student's required-at-first-login fields — deliberately never required
 // at admin add/renewal time (see the enrollment form / enrollment_requests).
@@ -40,4 +40,14 @@ export function teacherNeedsProfileCompletion(
     !teacher.phone_number ||
     !teacher.country
   );
+}
+
+// An admin's required-at-first-login fields. Name/email/username come from
+// the create-admin form (public.users), but phone and country live on the
+// `admins` row and are optional there — so, exactly as for teachers and
+// students, the admin's own first login is where they get collected.
+export function adminNeedsProfileCompletion(
+  admin: Pick<Admin, "phone_number" | "country">
+): boolean {
+  return !admin.phone_number || !admin.country;
 }
