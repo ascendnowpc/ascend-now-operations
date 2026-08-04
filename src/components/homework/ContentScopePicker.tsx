@@ -5,6 +5,12 @@ import type {
   ContentScopePart,
   OutlineChapter,
 } from "../../types/database";
+import {
+  buildContentScope,
+  isPartSelected,
+  selectedPartsOf,
+  togglePart,
+} from "../../utils/contentScope";
 
 interface Props {
   outline: ContentOutline;
@@ -22,27 +28,10 @@ interface ScopeItem {
   chapterIdx: number;
 }
 
-// Two parts refer to the same slice when their page ranges match.
-function sameRange(a: { page_start: number; page_end: number }, b: ContentScopePart) {
-  return a.page_start === b.page_start && a.page_end === b.page_end;
-}
-
-// Builds the ContentScope emitted upward from the checked parts (or null when
-// nothing is checked = whole document). `label`/page span summarize the parts.
-function buildScope(parts: ContentScopePart[]): ContentScope | null {
-  if (parts.length === 0) return null;
-  const ordered = [...parts].sort((a, b) => a.page_start - b.page_start);
-  const label =
-    ordered.length <= 2
-      ? ordered.map((p) => p.label).join("; ")
-      : `${ordered[0].label} + ${ordered.length - 1} more`;
-  return {
-    label,
-    page_start: Math.min(...ordered.map((p) => p.page_start)),
-    page_end: Math.max(...ordered.map((p) => p.page_end)),
-    parts: ordered,
-  };
-}
+// Selection rules (what counts as the same slice, toggling, the emitted
+// scope) live in src/utils/contentScope.ts so they're unit-tested — matching
+// slices by page range alone used to tick a whole chapter's worth of rows at
+// once whenever they shared a page.
 
 // Lets a teacher scope homework generation to the whole document or to any
 // combination of chapters/sections of an indexed PDF. Emits a ContentScope
@@ -51,13 +40,7 @@ function buildScope(parts: ContentScopePart[]): ContentScope | null {
 export function ContentScopePicker({ outline, value, onChange }: Props) {
   const chapters: OutlineChapter[] = useMemo(() => outline.chapters ?? [], [outline]);
 
-  // The currently-selected parts. A legacy single-scope value (no `parts`) is
-  // treated as one implicit part so it still shows as checked.
-  const selectedParts: ContentScopePart[] = useMemo(() => {
-    if (!value) return [];
-    if (value.parts && value.parts.length) return value.parts;
-    return [{ label: value.label, page_start: value.page_start, page_end: value.page_end }];
-  }, [value]);
+  const selectedParts: ContentScopePart[] = useMemo(() => selectedPartsOf(value), [value]);
 
   const items: ScopeItem[] = useMemo(() => {
     const out: ScopeItem[] = [];
@@ -84,17 +67,10 @@ export function ContentScopePicker({ outline, value, onChange }: Props) {
     return out;
   }, [chapters]);
 
-  const isChecked = (item: ScopeItem) => selectedParts.some((p) => sameRange(item, p));
+  const isChecked = (item: ScopeItem) => isPartSelected(selectedParts, item);
 
   function toggle(item: ScopeItem) {
-    const exists = isChecked(item);
-    const next = exists
-      ? selectedParts.filter((p) => !sameRange(item, p))
-      : [
-          ...selectedParts,
-          { label: item.label, page_start: item.page_start, page_end: item.page_end },
-        ];
-    onChange(buildScope(next));
+    onChange(buildContentScope(togglePart(selectedParts, item)));
   }
 
   const wholeDoc = selectedParts.length === 0;
