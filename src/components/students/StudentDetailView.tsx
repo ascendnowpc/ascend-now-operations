@@ -18,7 +18,7 @@ import { useMyTeacherProfile } from "../../hooks/useMyTeacherProfile";
 import { StudentStatusBadge, StudentStatusMenu } from "./StudentStatusControls";
 import { ParentPicker } from "./ParentPicker";
 import { useParents } from "../../hooks/useParents";
-import { parentDisplayName } from "../../utils/parentDirectory";
+import { parentDisplayName, applyParentToGuardianContact } from "../../utils/parentDirectory";
 import { HomeworkResultsList } from "../homework/HomeworkResultsList";
 import { CoordinatorLogHistoryList } from "../coordinatorLogs/CoordinatorLogHistoryList";
 import type { PackageTopup, SessionLog, Student, StudentPackage } from "../../types/database";
@@ -342,14 +342,19 @@ export function StudentDetailView({ role, backPath, backLabel }: {
   function startEditContact() {
     if (!student) return;
     const { code, number } = splitPhone(student.phone_number ?? null);
-    const parentPhone = splitPhone(student.parent_phone_number ?? null);
+    // The same derived guardian the read-only view shows (`guardianContact`
+    // below): from the linked parent account when the family has one. Opening
+    // the form on a student linked before that account's details were filled
+    // in therefore shows the account's values, not the stale stored copy that
+    // saving would otherwise write straight back.
+    const parentPhone = splitPhone(guardianContact.phone);
     setContactForm({
       first_name: student.first_name ?? "",
       last_name:  student.last_name  ?? "",
       email:     student.email   ?? "",
       notification_email: student.notification_email ?? "",
       curriculum: student.curriculum ?? "",
-      parent_full_name: student.parent_full_name ?? "",
+      parent_full_name: guardianContact.fullName,
       parent_phone_code: parentPhone.code,
       parent_phone_num:  parentPhone.number,
       parent_id: student.parent_id ?? "",
@@ -675,6 +680,15 @@ export function StudentDetailView({ role, backPath, backLabel }: {
   }
 
   const fullName = `${student.first_name} ${student.last_name}`;
+
+  // The guardian as displayed: from the linked parent account when the family
+  // has one, otherwise the plain fields stored on the student. Derived rather
+  // than read straight off the row so the read-only view, the edit form, and
+  // the account itself can never show three different answers.
+  const guardianContact = applyParentToGuardianContact(
+    { fullName: student.parent_full_name ?? "", phone: student.parent_phone_number ?? null },
+    student.parent_id ? parents.find((p) => p.id === student.parent_id) ?? null : null,
+  );
 
   // Active / On pause / Completed. An admin can move any student; a coach only
   // one currently assigned to them — completing a student unassigns them, so
@@ -1046,7 +1060,26 @@ export function StudentDetailView({ role, backPath, backLabel }: {
                     <ParentPicker
                       label="Parent account"
                       value={contactForm.parent_id || null}
-                      onChange={(id) => setContactForm((f) => ({ ...f, parent_id: id ?? "" }))}
+                      // Linking an account also fills the guardian name/phone
+                      // above from it — the account is the source of truth for
+                      // who the guardian is, so an admin doesn't type the same
+                      // details twice and the two can't drift apart.
+                      onChange={(id, parent) =>
+                        setContactForm((f) => {
+                          const filled = applyParentToGuardianContact(
+                            { fullName: f.parent_full_name, phone: joinPhone(f.parent_phone_code, f.parent_phone_num) },
+                            parent,
+                          );
+                          const phone = splitPhone(filled.phone);
+                          return {
+                            ...f,
+                            parent_id: id ?? "",
+                            parent_full_name: filled.fullName,
+                            parent_phone_code: phone.code,
+                            parent_phone_num: phone.number,
+                          };
+                        })
+                      }
                       returnTo={`/admin/students/${student.id}`}
                     />
                   </div>
@@ -1096,8 +1129,11 @@ export function StudentDetailView({ role, backPath, backLabel }: {
                 ["Student Phone", student.phone_number],
                 ["Address", student.address],
                 ["Country", student.country],
-                ["Parent/Guardian name", student.parent_full_name],
-                ["Parent/Guardian Phone", student.parent_phone_number],
+                // Shown from the linked parent account when there is one, the
+                // same as the edit form above, so the two never disagree about
+                // who the guardian is.
+                ["Parent/Guardian name", guardianContact.fullName || null],
+                ["Parent/Guardian Phone", guardianContact.phone],
                 [
                   "Parent account",
                   (() => {

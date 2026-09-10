@@ -12,6 +12,8 @@ import { useCourseTypes } from "../../hooks/useCourseTypes";
 import { usePcAssignments } from "../../hooks/usePcAssignments";
 import { useEnrollmentRequests, type NewPackageInput } from "../../hooks/useEnrollmentRequests";
 import { ParentPicker } from "../../components/students/ParentPicker";
+import { useParents } from "../../hooks/useParents";
+import { applyParentToGuardianContact } from "../../utils/parentDirectory";
 import { useStudentPackages, PRESET_HOURS } from "../../hooks/useStudentPackages";
 import { useBundlePoolSettings, type BundlePoolDef } from "../../hooks/useBundlePoolSettings";
 import { buildEnrollmentInvoicePdf } from "../../utils/buildInvoicePdf";
@@ -70,6 +72,10 @@ export default function AdminEnrollStudentPage() {
   const { createEnrollmentRequest, sendInvoiceEmail } = useEnrollmentRequests();
   const { fetchPackagesForStudent } = useStudentPackages();
   const { poolDefsByBundle } = useBundlePoolSettings();
+  // Only to resolve the picked parent's own name/phone at submit time. Looked
+  // up by id rather than held from the picker's callback so the `?parent=<id>`
+  // return trip from /admin/parents/new resolves the same way a click does.
+  const { parents } = useParents();
 
   const coaches = teachers.filter((t) => t.is_performance_coach && t.is_active);
   // Every active course type is offered — the same list the rest of the app
@@ -271,6 +277,15 @@ export default function AdminEnrollStudentPage() {
       created_by_user_id: profile.id,
     };
 
+    // `enrollment_requests.phone_number` is the GUARDIAN's phone (the student's
+    // own is student_phone_number), so both of these come from the linked
+    // parent account when there is one. Nothing is typed on this form to
+    // preserve, hence the empty starting contact.
+    const guardianFromParent = applyParentToGuardianContact(
+      { fullName: "", phone: null },
+      parents.find((p) => p.id === parentId) ?? null,
+    );
+
     const input =
       kind === "renewal" && selectedStudent
         ? {
@@ -302,17 +317,24 @@ export default function AdminEnrollStudentPage() {
             ...base,
             first_name: firstName.trim(),
             // Not collected here — the student fills in everything else
-            // (last name, curriculum, phone, school details, guardian info,
-            // address/country, report card) on first login instead.
+            // (last name, curriculum, their own phone, school details,
+            // address/country, report card) on first login instead. Guardian
+            // name/phone are the exception now: when a parent account is
+            // linked they come from it, just below.
             last_name: "",
-            parent_full_name: null,
+            // Taken from the linked parent account when there is one, so the
+            // guardian's name/phone land on the new student at confirm instead
+            // of waiting for the student to type them at first login. Null
+            // when no account was picked — the first-login gate collects them
+            // then, exactly as before.
+            parent_full_name: guardianFromParent.fullName || null,
             parent_id: parentId,
             email: studentEmail.trim(),
             student_email: studentEmail.trim(),
             notification_email: null,
             curriculum: null,
             report_card_url: null,
-            phone_number: null,
+            phone_number: guardianFromParent.phone,
             student_phone_number: null,
             address: null,
             country: null,
