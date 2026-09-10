@@ -47,6 +47,9 @@ import AdminEnrollStudentPage from "./pages/admin/AdminEnrollStudentPage";
 import AdminEnrollmentsPage from "./pages/admin/AdminEnrollmentsPage";
 import AdminParentsPage from "./pages/admin/AdminParentsPage";
 import AdminParentFormPage from "./pages/admin/AdminParentFormPage";
+import AdminParentPackagesPage from "./pages/admin/AdminParentPackagesPage";
+import AdminParentPackageFormPage from "./pages/admin/AdminParentPackageFormPage";
+import AdminStudentFormPage from "./pages/admin/AdminStudentFormPage";
 
 import TeacherHomeworkPage from "./pages/teacher/TeacherHomeworkPage";
 import TeacherHomeworkReviewPage from "./pages/teacher/TeacherHomeworkReviewPage";
@@ -283,6 +286,14 @@ export default function App() {
             }
           />
           <Route
+            path="/admin/students/new"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminStudentFormPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/admin/students/:id"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
@@ -367,6 +378,22 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <AdminParentFormPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/parents/:id/packages"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminParentPackagesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/parents/:id/packages/new"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminParentPackageFormPage />
               </ProtectedRoute>
             }
           />

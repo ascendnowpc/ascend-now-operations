@@ -16,6 +16,9 @@ import {
   sessionLengthSummary,
   noShowBreakdown,
 } from "../../utils/parentActivity";
+import { FamilyUsageBar } from "../../components/students/FamilyUsageBar";
+import { useFamilyPackageUsage } from "../../hooks/useFamilyPackageUsage";
+import { isFamilyPackage, siblingColorMap, familyColorOrder } from "../../utils/familyPackages";
 import type { Student, StudentPackage } from "../../types/database";
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -48,11 +51,16 @@ function ActivityView({ student }: { student: Student }) {
   const [packages, setPackages] = useState<StudentPackage[]>([]);
   const [packagesLoading, setPackagesLoading] = useState(true);
 
+  // Who actually spent the family's hours. A parent sees every child's slice;
+  // the same RPC backs each child's own view, so the numbers agree.
+  const { usageByPackage } = useFamilyPackageUsage(packages.filter(isFamilyPackage).map((p) => p.id));
+  const colors = siblingColorMap(familyColorOrder(usageByPackage.values()));
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
       setPackagesLoading(true);
-      const rows = await fetchPackagesForStudent(student.id);
+      const rows = await fetchPackagesForStudent(student.id, student.parent_id);
       if (cancelled) return;
       setPackages(rows);
       setPackagesLoading(false);
@@ -137,6 +145,25 @@ function ActivityView({ student }: { student: Student }) {
                     <td className="py-2 pr-4 text-right text-navy-700">{formatHours(p.hours_used ?? 0)}</td>
                     <td className="py-2 text-right font-semibold text-navy-700">
                       {formatHours(Math.max((p.total_hours_purchased ?? 0) - (p.hours_used ?? 0), 0))}
+                    </td>
+                  </tr>
+                ))}
+                {/* A shared pool gets its own row underneath showing which
+                    child spent what — the balance above is the family's, not
+                    this one child's. */}
+                {packages.filter((p) => isFamilyPackage(p) && (usageByPackage.get(p.id) ?? []).length > 1).map((p) => (
+                  <tr key={`split-${p.id}`} className="border-t border-navy-50">
+                    <td colSpan={4} className="py-3">
+                      <p className="text-xs font-medium text-navy-400 mb-1.5">
+                        {courseTypeName(p.course_type_id)}
+                        {p.pool_label ? ` · ${p.pool_label}` : ""} — shared
+                      </p>
+                      <FamilyUsageBar
+                        usage={usageByPackage.get(p.id) ?? []}
+                        purchasedHours={p.total_hours_purchased ?? 0}
+                        colors={colors}
+                        highlightStudentId={student.id}
+                      />
                     </td>
                   </tr>
                 ))}

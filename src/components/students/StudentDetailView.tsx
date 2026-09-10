@@ -17,6 +17,9 @@ import { usePcAssignments } from "../../hooks/usePcAssignments";
 import { useMyTeacherProfile } from "../../hooks/useMyTeacherProfile";
 import { StudentStatusBadge, StudentStatusMenu } from "./StudentStatusControls";
 import { ParentPicker } from "./ParentPicker";
+import { FamilyUsageBar } from "./FamilyUsageBar";
+import { useFamilyPackageUsage } from "../../hooks/useFamilyPackageUsage";
+import { isFamilyPackage, siblingColorMap, familyColorOrder } from "../../utils/familyPackages";
 import { useParents } from "../../hooks/useParents";
 import { parentDisplayName, applyParentToGuardianContact } from "../../utils/parentDirectory";
 import { HomeworkResultsList } from "../homework/HomeworkResultsList";
@@ -182,6 +185,14 @@ export function StudentDetailView({ role, backPath, backLabel }: {
   const [sessions, setSessions] = useState<Pick<SessionLog, "id" | "session_date" | "course_type_id" | "program_type_id" | "student_package_id" | "session_duration_hrs" | "no_show_type" | "subject_id" | "curriculum_id" | "teacher_id" | "pool_ambiguous">[]>([]);
   const [invoices, setInvoices] = useState<InvoiceWithItems[]>([]);
   const [loadingPackages, setLoadingPackages] = useState(true);
+
+  // Who spent each shared pool. Admins and coaches both reach this — the RPC
+  // checks the caller can see the package before answering.
+  const { usageByPackage: familyUsageByPackage } = useFamilyPackageUsage(
+    packages.filter(isFamilyPackage).map((p) => p.id),
+  );
+  const siblingColors = siblingColorMap(familyColorOrder(familyUsageByPackage.values()));
+
   const [expandedTopups, setExpandedTopups] = useState<Set<number>>(new Set());
 
   // Clicking a By-subject / By-teacher row in a package card deep-links to the
@@ -288,7 +299,10 @@ export function StudentDetailView({ role, backPath, backLabel }: {
 
     setLoadingPackages(true);
     const [pkgs, sess, invs, pending, resolutions] = await Promise.all([
-      fetchPackagesForStudent(studentId),
+      // `s` is the student row this same load just fetched — passing its
+      // parent_id brings in the FAMILY pools they share with any siblings
+      // (2026-09-11), not just the packages bought for them alone.
+      fetchPackagesForStudent(studentId, s?.parent_id ?? null),
       fetchSessionsForBalance(studentId),
       fetchInvoicesForStudent(studentId),
       fetchPendingPoolSessions(studentId),
@@ -450,13 +464,16 @@ export function StudentDetailView({ role, backPath, backLabel }: {
   // now on (and any already-pending ones matching the same key) — never an
   // already-resolved session.
   async function handleAddResolution() {
-    if (!profile || newResolutionPoolId === "" || newResolutionTeacherId === "") return;
+    if (!profile || !student || newResolutionPoolId === "" || newResolutionTeacherId === "") return;
     const pool = packages.find((p) => p.id === newResolutionPoolId);
     if (!pool) return;
     setAddResolutionSaving(true);
     setAddResolutionError(null);
     const { error } = await createPoolResolution({
-      studentId: pool.student_id,
+      // The student whose page this is, not the pool's owner: a sticky
+      // (teacher, subject) → pool rule is always per-student, and a FAMILY
+      // pool has no student_id of its own at all (2026-09-11).
+      studentId: student.id,
       courseTypeId: pool.course_type_id,
       teacherId: newResolutionTeacherId,
       subjectId: newResolutionSubjectId === "" ? null : Number(newResolutionSubjectId),
@@ -748,7 +765,19 @@ export function StudentDetailView({ role, backPath, backLabel }: {
             {formatHours(hoursRemaining)} hrs remaining
           </span>
         </div>
-        <BalanceBar used={hoursUsed} total={pkg.total_hours_purchased} />
+        {/* A FAMILY pool's balance belongs to the household, not to this one
+            student, so show which child actually spent it once more than one
+            has (2026-09-11). */}
+        {isFamilyPackage(pkg) && (familyUsageByPackage.get(pkg.id) ?? []).length > 1 ? (
+          <FamilyUsageBar
+            usage={familyUsageByPackage.get(pkg.id) ?? []}
+            purchasedHours={pkg.total_hours_purchased}
+            colors={siblingColors}
+            highlightStudentId={studentId ?? null}
+          />
+        ) : (
+          <BalanceBar used={hoursUsed} total={pkg.total_hours_purchased} />
+        )}
         {pctUsed >= 0.75 && (
           <p className={`text-xs mt-1 ${pctUsed >= 0.9 ? "text-red-500" : "text-yellow-500"}`}>
             {pctUsed >= 0.9 ? "Package almost depleted — consider renewing" : "Package running low"}

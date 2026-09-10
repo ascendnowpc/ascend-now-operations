@@ -168,7 +168,16 @@ export interface PcProfile {
 
 export interface StudentPackage {
   id: number;
-  student_id: string;
+  // A package is owned by EXACTLY ONE of a student or a parent — the
+  // `student_packages_one_owner` CHECK enforces it (2026-09-11).
+  //   * student_id set  → an ordinary package, only that student draws on it.
+  //   * parent_id set   → a FAMILY package: every child of that parent draws
+  //     on the same pool, so 50 hours bought once can be split between
+  //     siblings however they actually get used.
+  // Use `packageOwnerLabel`/`isFamilyPackage` (utils/familyPackages) rather
+  // than testing the columns ad hoc.
+  student_id: string | null;
+  parent_id: string | null;
   program_type_id: number | null;
   course_type_id: number; // what this pool actually deducts against (Academic / Beyond Academic / College Counselling) — always the real matching category, unaffected by package_type_id
   package_type_id: number | null; // which bundle (e.g. Foundation Program / All-In-One course_type) this pool is grouped under for display/invoicing; null for an ordinary standalone package

@@ -116,7 +116,7 @@ export function StudentOverviewView({ student }: { student: Student }) {
     let cancelled = false;
     async function load() {
       setPackagesLoading(true);
-      const pkgs = await fetchPackagesForStudent(student.id);
+      const pkgs = await fetchPackagesForStudent(student.id, student.parent_id);
       if (cancelled) return;
       setPackages(pkgs);
       setPackagesLoading(false);

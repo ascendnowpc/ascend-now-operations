@@ -82,9 +82,13 @@ export default function TeacherRenewalRequestsPage() {
   useEffect(() => {
     if (!adding || !form.studentId) { setExistingPackages([]); return; }
     let cancelled = false;
-    fetchPackagesForStudent(form.studentId).then((pkgs) => { if (!cancelled) setExistingPackages(pkgs); });
+    // Include the student's FAMILY pools (2026-09-11): a bundle the family
+    // already owns counts as owned for this student too, so the form offers
+    // "top up a pool" rather than "buy the bundle again".
+    const parentId = students.find((s) => s.id === form.studentId)?.parent_id ?? null;
+    fetchPackagesForStudent(form.studentId, parentId).then((pkgs) => { if (!cancelled) setExistingPackages(pkgs); });
     return () => { cancelled = true; };
-  }, [adding, form.studentId, fetchPackagesForStudent]);
+  }, [adding, form.studentId, fetchPackagesForStudent, students]);
 
   // Coaches and counsellors both file renewals now, so the picker is the union
   // of whichever rosters this person actually has — the same rule that decides
