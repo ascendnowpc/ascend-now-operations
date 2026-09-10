@@ -58,3 +58,34 @@ export function findParentByEmail(parents: Parent[], email: string): Parent | nu
   if (!needle) return null;
   return parents.find((p) => (p.email ?? "").trim().toLowerCase() === needle) ?? null;
 }
+
+// The guardian's name/phone as they should read once a student is linked to a
+// parent ACCOUNT. Until 2026-09-10 the two were entirely independent — the
+// account carried its own name/phone and `students.parent_full_name` /
+// `parent_phone_number` carried theirs, so an admin had to type the same
+// details twice and the two could silently disagree. Linking an account now
+// fills those fields from it: the account is the source of truth for who the
+// guardian is.
+//
+// Two deliberate edges:
+//   * A parent with no phone on file does NOT wipe a phone already typed on
+//     the student — filling in from the account should never lose contact
+//     info the account happens not to have.
+//   * Unlinking (parent = null) leaves both fields exactly as they are. A
+//     family can stop having a login and still have a name and a number.
+export interface GuardianContact {
+  fullName: string;
+  phone: string | null;
+}
+
+export function applyParentToGuardianContact(
+  current: GuardianContact,
+  parent: Pick<Parent, "first_name" | "last_name" | "phone_number"> | null,
+): GuardianContact {
+  if (!parent) return current;
+  const parentPhone = (parent.phone_number ?? "").trim();
+  return {
+    fullName: parentDisplayName(parent),
+    phone: parentPhone || current.phone,
+  };
+}

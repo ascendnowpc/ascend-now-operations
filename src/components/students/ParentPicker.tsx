@@ -14,7 +14,13 @@ import type { Parent } from "../../types/database";
 interface ParentPickerProps {
   label: string;
   value: string | null;
-  onChange: (parentId: string | null) => void;
+  /**
+   * The full row comes back alongside the id, not just the id, because callers
+   * need the parent's own name/phone to fill the student's guardian fields
+   * from it (see applyParentToGuardianContact). `parent` is null when the link
+   * is being cleared.
+   */
+  onChange: (parentId: string | null, parent: Parent | null) => void;
   /** Where "+ New parent" should send the admin back to once it's created. */
   returnTo?: string;
 }
@@ -75,7 +81,7 @@ export function ParentPicker({ label, value, onChange, returnTo }: ParentPickerP
           </div>
           <button
             type="button"
-            onClick={() => onChange(null)}
+            onClick={() => onChange(null, null)}
             className="text-xs text-navy-400 hover:text-red-500 shrink-0 ml-3"
           >
             Change
@@ -113,7 +119,7 @@ export function ParentPicker({ label, value, onChange, returnTo }: ParentPickerP
                   <button
                     key={p.id}
                     type="button"
-                    onClick={() => { onChange(p.id); setSearch(""); }}
+                    onClick={() => { onChange(p.id, p); setSearch(""); }}
                     className="w-full flex items-center justify-between px-3.5 py-2.5 text-left hover:bg-sky-50 transition-colors border-b border-navy-50 last:border-b-0"
                   >
                     <span className="text-sm text-navy-700">

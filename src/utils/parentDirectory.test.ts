@@ -5,6 +5,7 @@ import {
   childrenOf,
   parentMatchesSearch,
   findParentByEmail,
+  applyParentToGuardianContact,
 } from "./parentDirectory";
 import type { Parent, Student } from "../types/database";
 
@@ -146,5 +147,45 @@ describe("findParentByEmail — the sibling duplicate guard", () => {
   it("returns null for a blank query rather than matching a parent with no email", () => {
     expect(findParentByEmail([parent({ email: null })], "")).toBeNull();
     expect(findParentByEmail([parent({ email: null })], "   ")).toBeNull();
+  });
+});
+
+describe("applyParentToGuardianContact — linking an account fills the guardian fields", () => {
+  it("takes the name and phone from the linked parent", () => {
+    expect(
+      applyParentToGuardianContact({ fullName: "", phone: null }, parent()),
+    ).toEqual({ fullName: "Sarah Khan", phone: "+971 50 123 4567" });
+  });
+
+  it("overwrites what was typed, because the account is the source of truth", () => {
+    expect(
+      applyParentToGuardianContact(
+        { fullName: "typed by hand", phone: "+91 99999 99999" },
+        parent(),
+      ),
+    ).toEqual({ fullName: "Sarah Khan", phone: "+971 50 123 4567" });
+  });
+
+  it("keeps a phone already on the student when the parent has none", () => {
+    // Filling in from the account must never lose contact info the account
+    // simply doesn't have.
+    expect(
+      applyParentToGuardianContact(
+        { fullName: "typed by hand", phone: "+91 99999 99999" },
+        parent({ phone_number: null }),
+      ),
+    ).toEqual({ fullName: "Sarah Khan", phone: "+91 99999 99999" });
+  });
+
+  it("treats a whitespace-only parent phone as no phone", () => {
+    expect(
+      applyParentToGuardianContact({ fullName: "", phone: "+91 1" }, parent({ phone_number: "   " })).phone,
+    ).toBe("+91 1");
+  });
+
+  it("leaves both fields untouched when the link is cleared", () => {
+    // A family can stop having a login and still have a name and a number.
+    const current = { fullName: "devender gupta", phone: "+971 999999999" };
+    expect(applyParentToGuardianContact(current, null)).toEqual(current);
   });
 });
