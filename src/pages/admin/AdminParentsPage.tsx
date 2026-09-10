@@ -10,6 +10,8 @@ import { IconPlus } from "../../components/ui/icons";
 import { useParents } from "../../hooks/useParents";
 import { useStudents } from "../../hooks/useStudents";
 import { childrenOf, parentMatchesSearch } from "../../utils/parentDirectory";
+import { useFamilyPackages } from "../../hooks/useStudentPackages";
+import { formatHours } from "../../utils/formatHours";
 import type { Parent } from "../../types/database";
 
 /**
@@ -25,6 +27,9 @@ import type { Parent } from "../../types/database";
 export default function AdminParentsPage() {
   const { parents, loading } = useParents();
   const { students } = useStudents();
+  // Every family pool in one read, so the list can show each family's balance
+  // without a query per row.
+  const { familyPackages } = useFamilyPackages();
   const navigate = useNavigate();
 
   const [search, setSearch] = useState("");
@@ -58,6 +63,17 @@ export default function AdminParentsPage() {
           </span>
         );
       },
+    },
+    {
+      header: "Hours",
+      accessor: (p) => {
+        const pkgs = familyPackages.filter((row) => row.parent_id === p.id);
+        if (pkgs.length === 0) return "—";
+        const purchased = pkgs.reduce((sum, row) => sum + (row.total_hours_purchased ?? 0), 0);
+        const used = pkgs.reduce((sum, row) => sum + (row.hours_used ?? 0), 0);
+        return `${formatHours(Math.max(purchased - used, 0))} / ${formatHours(purchased)}`;
+      },
+      className: "whitespace-nowrap",
     },
     {
       header: "Status",
@@ -107,6 +123,7 @@ export default function AdminParentsPage() {
         rows={filtered}
         getRowId={(p) => p.id}
         loading={loading}
+        onRowClick={(p) => navigate(`/admin/parents/${p.id}/packages`)}
         onEdit={(p) => navigate(`/admin/parents/${p.id}/edit`)}
         emptyMessage="No parent accounts yet."
       />

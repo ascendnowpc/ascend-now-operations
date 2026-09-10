@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import type { PackageTopup, SessionLog, SessionLogPoolResolution, StudentPackage, Subject, Teacher } from "../types/database";
 import { computeHoursUsed, computeHoursUsedBySubject, computeHoursUsedByTeacher } from "../utils/packageHours";
@@ -9,13 +9,40 @@ export function useStudentPackages() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch all packages for a student, each with its topup history
-  const fetchPackagesForStudent = useCallback(async (studentId: string) => {
+  // Every package a student can draw on, each with its topup history: their
+  // own, PLUS their family's — a pool bought once by the parent and shared by
+  // every sibling (2026-09-11). `parentId` is the student's own
+  // `students.parent_id`; pass null/undefined for a student with no family
+  // account and this behaves exactly as it always did.
+  //
+  // The `or` filter mirrors the `student_package_ids()` SQL helper that the
+  // session-log trigger routes deductions through, so what a student is shown
+  // they can spend is the same set the database actually lets them spend. RLS
+  // (can_view_package) independently enforces the same thing.
+  const fetchPackagesForStudent = useCallback(async (studentId: string, parentId?: string | null) => {
+    setLoading(true);
+    let query = supabase.from("student_packages").select("*, package_topups(*)");
+    query = parentId
+      ? query.or(`student_id.eq.${studentId},parent_id.eq.${parentId}`)
+      : query.eq("student_id", studentId);
+    const { data, error } = await query.order("created_at", { ascending: true });
+    setLoading(false);
+    if (error) {
+      setError(error.message);
+      return [];
+    }
+    setError(null);
+    return (data ?? []) as (StudentPackage & { package_topups: PackageTopup[] })[];
+  }, []);
+
+  // Every package owned by a parent — the family pools, for the admin's parent
+  // packages page. A student-owned package never appears here.
+  const fetchPackagesForParent = useCallback(async (parentId: string) => {
     setLoading(true);
     const { data, error } = await supabase
       .from("student_packages")
       .select("*, package_topups(*)")
-      .eq("student_id", studentId)
+      .eq("parent_id", parentId)
       .order("created_at", { ascending: true });
     setLoading(false);
     if (error) {
@@ -24,6 +51,49 @@ export function useStudentPackages() {
     }
     setError(null);
     return (data ?? []) as (StudentPackage & { package_topups: PackageTopup[] })[];
+  }, []);
+
+  // Creates a family pool — owned by the parent, drawn down by every one of
+  // their children. Separate from createLabeledPackage rather than a flag on
+  // it, because the two are mutually exclusive at the database level
+  // (student_packages_one_owner) and a single function taking both ids would
+  // just be a runtime error waiting to happen.
+  const createFamilyPackage = useCallback(async (opts: {
+    parentId: string;
+    courseTypeId: number;
+    packageTypeId?: number | null;
+    poolLabel?: string | null;
+    initialHours: number;
+    note?: string | null;
+    addedByUserId: string;
+  }) => {
+    const { data, error } = await supabase
+      .from("student_packages")
+      .insert({
+        parent_id: opts.parentId,
+        course_type_id: opts.courseTypeId,
+        package_type_id: opts.packageTypeId ?? null,
+        pool_label: opts.poolLabel ?? null,
+      })
+      .select()
+      .single();
+    if (error || !data) return { data: null, error: error?.message ?? "Failed to create package" };
+
+    // Hours arrive as a top-up rather than as total_hours_purchased directly,
+    // so the purchase shows up in the package's history the same way every
+    // later renewal will — on_package_topup_inserted() is what actually moves
+    // total_hours_purchased.
+    const { error: topupErr } = await supabase.from("package_topups").insert({
+      student_package_id: (data as StudentPackage).id,
+      hours_added: opts.initialHours,
+      package_size_label: `${opts.initialHours} hours`,
+      note: opts.note ?? null,
+      added_by_user_id: opts.addedByUserId,
+    });
+    if (topupErr) {
+      return { data: data as StudentPackage, error: `Package created but adding hours failed: ${topupErr.message}` };
+    }
+    return { data: data as StudentPackage, error: null };
   }, []);
 
   // Fetch or create the *current* package row for a student+course_type
@@ -389,6 +459,8 @@ export function useStudentPackages() {
     loading,
     error,
     fetchPackagesForStudent,
+    fetchPackagesForParent,
+    createFamilyPackage,
     getOrCreatePackage,
     createLabeledPackage,
     addTopup,
@@ -406,4 +478,31 @@ export function useStudentPackages() {
     updatePoolResolutionTarget,
     createPoolResolution,
   };
+}
+
+
+/**
+ * Every family (parent-owned) package in one read.
+ *
+ * For list screens that need a balance per family — the admin Parents list —
+ * where a query per row would be one round trip per family. RLS still applies:
+ * an admin sees all of them, a parent only their own.
+ */
+export function useFamilyPackages() {
+  const [familyPackages, setFamilyPackages] = useState<StudentPackage[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("student_packages")
+      .select("*")
+      .not("parent_id", "is", null);
+    setFamilyPackages((data ?? []) as StudentPackage[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { refetch(); }, [refetch]);
+
+  return { familyPackages, loading, refetch };
 }

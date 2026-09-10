@@ -2,6 +2,34 @@
 
 **Generated 2026-07-01 by direct introspection of the live Supabase project (`ascend-now`, ref `uqyuczvckqxgtilpzarh`, org `ascend-now`) via the Supabase MCP connection — every table, column, constraint, policy, function, and trigger below was read straight from the running Postgres instance, not from the migration files or any prior doc.**
 
+**Updated 2026-09-11 (family packages — a pool bought by a parent and drawn down by every sibling; `student_packages.parent_id`, nullable `student_id`, a widened session-log router, and a per-sibling usage RPC).** Applied to the live project (ref `rpavogsdladesmghwodg`) via Supabase MCP `apply_migration` as `supabase/migrations/20260911000000_family_packages.sql`, verified live end to end.
+
+Hours were owned by a student, so a family that bought 100 Academic hours had to split them into two packages up front and whichever child ran out first was stuck while the other's balance sat unused. **A package is now owned by exactly one of a student or a parent** — `CHECK (num_nonnulls(student_id, parent_id) = 1)`, added `NOT VALID` then validated separately so it would fail loudly on any pre-existing violation rather than silently take a long lock. `student_id` is now nullable; every package that existed before this change is student-owned and completely unaffected.
+
+**Schema:** `student_packages.parent_id text REFERENCES parents(id)` (partial index `idx_student_packages_parent_id`), and a new partial unique index `student_packages_one_current_per_family_course_type` on `(parent_id, course_type_id, coalesce(pool_label,'')) WHERE (not is_locked) and parent_id is not null` — the existing per-student index stops constraining family rows the moment `student_id` goes null, since Postgres treats NULLs as distinct in a unique index.
+
+**What did NOT need changing, and why it matters:** `recompute_package_hours_used()` is untouched. It already sums `session_logs.session_duration_hrs` by `student_package_id` without caring whose student a row belongs to, so two siblings drawing on one pool sum correctly as-is. Per-sibling attribution likewise needed no new bookkeeping — `session_logs.student_id` already says which child sat the session.
+
+**`handle_session_log_package_lock()`** is the one behavioural change: its candidate-count lookup, its sticky (teacher, subject) resolution and its `pool_label` direct match all widen from `student_id = NEW.student_id` to `id IN (SELECT student_package_ids(NEW.student_id))` — the student's own pools **plus** their family's. Every other branch (the locked-package guards, the keep-the-existing-assignment shortcut on UPDATE, the ambiguity flag) is byte-for-byte what it was. The zero-hour fallback pool it creates when no pool of the right course type exists is deliberately still **student**-owned: it exists to make an overage visible against the right course type, and inventing a family pool there would silently create shared hours nobody bought.
+
+**New functions** (all SECURITY DEFINER, `SET search_path = public`, granted EXECUTE to `authenticated`/`service_role`):
+- **`student_package_ids(p_student_id text) → setof bigint`** — every pool a student may draw on. One definition, used by the trigger, by RLS and by the UI's fetch, so "what can this student spend" cannot come to mean three different things.
+- **`can_view_package(p_student_id text, p_parent_id text)`** — the read gate for a package whichever way it is owned: `can_view_student()` for a student-owned one; for a family one, the parent themselves **or any of their children** (the children are the ones spending it).
+- **`is_my_assigned_package(p_student_id text, p_parent_id text)`** — the staff equivalent; a coach reaches a family pool through any of that family's children on their roster.
+- **`family_package_usage_by_student(p_package_id bigint)`** — per-child `sessions`/`no_shows`/`hours` totals for one package, applying the same No Show 1/2 rule `recompute_package_hours_used()` does. It re-checks the caller can see the package before returning anything, and returns no rows rather than raising when they can't.
+
+**Policies rewritten** onto the two ownership-aware helpers: `student_parent_read_packages` and `pc_manage_assigned_packages` on `student_packages`; `student_parent_read_topups`, `pc_select_own_topups` and `pc_insert_own_topups` on `package_topups`.
+
+**Why the usage RPC exists at all** — this is the interesting constraint. A student must be able to see that their sibling used 12 of the family's hours **without** being able to read any of that sibling's session logs. RLS on `session_logs` rightly shows a student only their own rows, so no client-side GROUP BY could ever produce a sibling's total; the aggregate has to happen inside SECURITY DEFINER, where the total gets out and the detail stays in.
+
+**Verified live** (every write inside rolled-back transactions; the database was confirmed back to 0 family packages and 0 probe auth users afterwards):
+- Two siblings with no packages of their own, one 50-hour family Academic pool: **all three sessions from both children routed to that same pool**, `pool_fallback_used = false`, `pool_ambiguous = false`.
+- `hours_used` came to **10.5** from 3 + 2 + 5.5 with a No Show 1 correctly costing nothing; remaining 39.5.
+- Impersonating one sibling as `authenticated`: **1** package visible (the shared pool), **2** session logs visible and `count(distinct student_id) = 1` — only their own — the sibling's `students` row **not** readable, and `family_package_usage_by_student` nonetheless returning both children's totals (Elder 2 sessions/5 hrs, Younger 1 session/5.5 hrs).
+- Full flow as the parent: 50 bought / 20 used, split Ava 12 hrs, Ben 8 hrs.
+
+**Edge function:** new **`create-student-with-user`** (admin-only) — creates the Auth account, the `students` row and the PC assignment, and emails credentials, exactly the way `create-teacher-with-user` does. It deliberately writes no `enrollment_requests` row and involves no invoice, payment link or payment proof; the enrollment workflow (§2.9) stays for when money is actually changing hands.
+
 **Updated 2026-09-10 (parent accounts return, as households — new `parents` table, `students.parent_id`, `enrollment_requests.parent_id`, the `parent` role, and read access for the parent dashboard).** Applied to the live project (ref `rpavogsdladesmghwodg`) via Supabase MCP `apply_migration` as `supabase/migrations/20260910000000_parent_role_enum.sql` and `20260910000100_parent_accounts_and_dashboard.sql`, verified live and RLS-tested by impersonation. *(Note: the "Generated 2026-07-01" header above names ref `uqyuczvckqxgtilpzarh`; the live project this was applied to — and introspected against, schema and data matching this repo exactly — is `rpavogsdladesmghwodg`. Worth reconciling that header.)*
 
 The `parent` role and `parents` table were removed on 2026-07-07 (entry below) when the student and parent dashboards were merged. They are back for a **different** reason than the one they were dropped for: the old parent account duplicated one student's dashboard, whereas this one is a **household** — one login owning any number of students — which cannot be expressed as fields on a student row. The plain `parent_full_name`/`parent_phone_number` columns stay exactly as they are and are independent of the link.
@@ -758,7 +786,8 @@ Unique index `subjects_name_cat_no_group_idx` on `(name, category_id)` **where `
 | Column | Type | Nullable | Default |
 |---|---|---|---|
 | id | bigint (identity) | NO | — |
-| student_id | text → `students.id` | NO | — |
+| student_id | text → `students.id` | **YES** (since 2026-09-11) | — the owning student, for an ordinary package |
+| parent_id | text → `parents.id` | YES | — (added 2026-09-11) the owning parent, for a **FAMILY** package every one of their children draws on. `CHECK student_packages_one_owner`: exactly one of `student_id`/`parent_id` is set |
 | program_type_id | smallint → `program_types.id` | YES | — |
 | total_hours_purchased | numeric | NO | 0 | CHECK: `>= 0` |
 | hours_used | numeric | NO | 0 | (added 2026-08-01) Stored, DB-maintained "used hours" total for this package — `SUM(session_duration_hrs)` of its linked `session_logs`, excluding No Show 1/2. Kept correct by `recompute_package_hours_used()` on every session insert/update/delete (including moves between packages), so the balance is an authoritative saved figure rather than a client-side re-count. Equals `computeHoursUsed()`'s package-scoped result; the frontend now reads this column for the headline per-package balance (per-subject/per-teacher breakdowns still aggregate the session rows). See `supabase/migrations/20260801000000_stored_package_hours_used.sql`. |

@@ -160,7 +160,7 @@ export default function AdminEnrollStudentPage() {
   useEffect(() => {
     if (kind !== "renewal" || !selectedStudent) { setExistingPackages([]); return; }
     let cancelled = false;
-    fetchPackagesForStudent(selectedStudent.id).then((pkgs) => { if (!cancelled) setExistingPackages(pkgs); });
+    fetchPackagesForStudent(selectedStudent.id, selectedStudent.parent_id).then((pkgs) => { if (!cancelled) setExistingPackages(pkgs); });
     return () => { cancelled = true; };
   }, [kind, selectedStudent, fetchPackagesForStudent]);
 

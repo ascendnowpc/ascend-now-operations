@@ -9,6 +9,9 @@ import { useCurricula } from "../../hooks/useCurricula";
 import { useTeachers } from "../../hooks/useTeachers";
 import type { PackageTopup, SessionLog, Student, StudentPackage } from "../../types/database";
 import { formatHours } from "../../utils/formatHours";
+import { FamilyUsageBar } from "../students/FamilyUsageBar";
+import { useFamilyPackageUsage } from "../../hooks/useFamilyPackageUsage";
+import { isFamilyPackage, siblingColorMap, familyColorOrder } from "../../utils/familyPackages";
 import { subjectLabel } from "../../utils/subjectLabel";
 import { sessionCountLabel } from "../../utils/noShow";
 import { BalanceBar } from "./packageUi";
@@ -43,7 +46,7 @@ export function StudentPackagesView({ student }: { student: Student }) {
     let cancelled = false;
     async function load() {
       setLoading(true);
-      const [pkgs, sess] = await Promise.all([fetchPackagesForStudent(student.id), fetchSessionsForBalance(student.id)]);
+      const [pkgs, sess] = await Promise.all([fetchPackagesForStudent(student.id, student.parent_id), fetchSessionsForBalance(student.id)]);
       if (cancelled) return;
       setPackages(pkgs);
       setSessions(sess as BalanceSession[]);
@@ -52,6 +55,12 @@ export function StudentPackagesView({ student }: { student: Student }) {
     load();
     return () => { cancelled = true; };
   }, [student.id, fetchPackagesForStudent, fetchSessionsForBalance]);
+
+  // Per-sibling usage of every pool this student can draw on. Comes from the
+  // aggregate RPC, which is what lets a student see how much of a shared pool a
+  // sibling used without gaining any access to that sibling's session logs.
+  const { usageByPackage } = useFamilyPackageUsage(packages.filter(isFamilyPackage).map((p) => p.id));
+  const colors = siblingColorMap(familyColorOrder(usageByPackage.values()));
 
   const subjectLookup = new Map(subjects.map((s) => [s.id, { name: s.name, level: s.level }]));
   const curriculumLookup = new Map(curricula.map((c) => [c.id, c.name]));
@@ -89,7 +98,14 @@ export function StudentPackagesView({ student }: { student: Student }) {
     const hoursUsed = pkg.hours_used;
     const hoursRemaining = pkg.total_hours_purchased - hoursUsed;
     const pctUsed = pkg.total_hours_purchased > 0 ? hoursUsed / pkg.total_hours_purchased : 0;
+    // Only this student's own sessions — RLS gives them nothing else, which is
+    // exactly right: the By subject / By teacher breakdowns below stay strictly
+    // personal even on a shared pool.
     const pkgSessions = sessions.filter((s) => s.student_package_id === pkg.id);
+    const familyUsage = usageByPackage.get(pkg.id) ?? [];
+    // A shared pool is only worth splitting out once more than one child has
+    // actually drawn on it; before that it reads like an ordinary package.
+    const showFamilySplit = isFamilyPackage(pkg) && familyUsage.length > 1;
     const subjectBreakdown = computeHoursUsedBySubject(pkgSessions);
     const teacherBreakdown = computeHoursUsedByTeacher(pkgSessions);
 
@@ -103,7 +119,16 @@ export function StudentPackagesView({ student }: { student: Student }) {
             {formatHours(hoursRemaining)} hrs remaining
           </span>
         </div>
-        <BalanceBar used={hoursUsed} total={pkg.total_hours_purchased} />
+        {showFamilySplit ? (
+          <FamilyUsageBar
+            usage={familyUsage}
+            purchasedHours={pkg.total_hours_purchased}
+            colors={colors}
+            highlightStudentId={student.id}
+          />
+        ) : (
+          <BalanceBar used={hoursUsed} total={pkg.total_hours_purchased} />
+        )}
         {pctUsed >= 0.75 && (
           <p className={`text-xs mt-1 ${pctUsed >= 0.9 ? "text-red-500" : "text-yellow-500"}`}>
             {pctUsed >= 0.9 ? "Package almost depleted — a renewal may be needed soon" : "Package running low"}
