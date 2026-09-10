@@ -30,6 +30,7 @@ export default function LoginPage() {
       return <Navigate to="/teacher" replace />;
     }
     if (profile.role === "student") return <Navigate to="/student" replace />;
+    if (profile.role === "parent") return <Navigate to="/parent" replace />;
   }
 
   async function handleSubmit(e: FormEvent) {

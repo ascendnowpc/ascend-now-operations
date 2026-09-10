@@ -16,6 +16,9 @@ import { useTeachers, useAllTeacherSubjects } from "../../hooks/useTeachers";
 import { usePcAssignments } from "../../hooks/usePcAssignments";
 import { useMyTeacherProfile } from "../../hooks/useMyTeacherProfile";
 import { StudentStatusBadge, StudentStatusMenu } from "./StudentStatusControls";
+import { ParentPicker } from "./ParentPicker";
+import { useParents } from "../../hooks/useParents";
+import { parentDisplayName } from "../../utils/parentDirectory";
 import { HomeworkResultsList } from "../homework/HomeworkResultsList";
 import { CoordinatorLogHistoryList } from "../coordinatorLogs/CoordinatorLogHistoryList";
 import type { PackageTopup, SessionLog, Student, StudentPackage } from "../../types/database";
@@ -160,6 +163,9 @@ export function StudentDetailView({ role, backPath, backLabel }: {
   // Only used to tell whether a coach viewing this page is THIS student's
   // coach (an admin has no teachers row, so it stays null for them).
   const { teacher: myTeacher } = useMyTeacherProfile();
+  // Only for naming the linked household on the Details tab — staff can read
+  // parent rows (staff_read_parents), so this resolves for a coach too.
+  const { parents } = useParents();
 
   const tabParam = searchParams.get("tab");
   const initialTab: Tab =
@@ -220,6 +226,9 @@ export function StudentDetailView({ role, backPath, backLabel }: {
     parent_full_name: "",
     parent_phone_code: "+971",
     parent_phone_num: "",
+    // The linked parent ACCOUNT (parents.id), separate from the plain
+    // guardian name/phone above — "" here means no household linked.
+    parent_id: "",
     phone_code: "+971",
     phone_num: "",
     address: "",
@@ -343,6 +352,7 @@ export function StudentDetailView({ role, backPath, backLabel }: {
       parent_full_name: student.parent_full_name ?? "",
       parent_phone_code: parentPhone.code,
       parent_phone_num:  parentPhone.number,
+      parent_id: student.parent_id ?? "",
       phone_code: code,
       phone_num: number,
       address:   student.address ?? "",
@@ -372,6 +382,7 @@ export function StudentDetailView({ role, backPath, backLabel }: {
         curriculum:       contactForm.curriculum || null,
         parent_full_name: contactForm.parent_full_name || null,
         parent_phone_number: joinPhone(contactForm.parent_phone_code, contactForm.parent_phone_num),
+        parent_id:        contactForm.parent_id || null,
         phone_number:     joinPhone(contactForm.phone_code, contactForm.phone_num),
         address:          contactForm.address || null,
         country:          contactForm.country || null,
@@ -1030,6 +1041,16 @@ export function StudentDetailView({ role, backPath, backLabel }: {
                     </div>
                   </div>
                 </div>
+                {isAdmin && (
+                  <div className="mt-3">
+                    <ParentPicker
+                      label="Parent account"
+                      value={contactForm.parent_id || null}
+                      onChange={(id) => setContactForm((f) => ({ ...f, parent_id: id ?? "" }))}
+                      returnTo={`/admin/students/${student.id}`}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Read-only — assigned/generated elsewhere in the app, not editable here. */}
@@ -1077,6 +1098,14 @@ export function StudentDetailView({ role, backPath, backLabel }: {
                 ["Country", student.country],
                 ["Parent/Guardian name", student.parent_full_name],
                 ["Parent/Guardian Phone", student.parent_phone_number],
+                [
+                  "Parent account",
+                  (() => {
+                    if (!student.parent_id) return null;
+                    const p = parents.find((row) => row.id === student.parent_id);
+                    return p ? `${parentDisplayName(p)} (${p.id})` : student.parent_id;
+                  })(),
+                ],
                 ["Student added date", new Date(student.created_at).toLocaleDateString()],
               ] as [string, string | null][]).map(([label, val]) => (
                 <div key={label} className="flex gap-2">

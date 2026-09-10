@@ -1,0 +1,22 @@
+-- Parent accounts, part 1 of 2 — put 'parent' back into the user_role enum.
+--
+-- The role was removed on 2026-07-07 (20260710010000_remove_parent_role_and_infra)
+-- when the student and parent dashboards were merged into one. It comes back
+-- now for a genuinely different reason than the one it was dropped for: a
+-- parent is no longer a duplicate of the student's own view but a household
+-- account that spans SIBLINGS — one login that lists every child enrolled
+-- under it. That can't be expressed as fields on a student row, so the
+-- separate login role is back. See part 2 for the table and access rules.
+--
+-- Kept in its own migration on purpose: Postgres will not let a value added
+-- by ALTER TYPE ... ADD VALUE be *used* in the same transaction that adds it,
+-- and every migration here runs inside one. Part 2 never writes the literal
+-- 'parent' (its helpers test for a parents row, not for the role), so with
+-- this file committed first the pair applies cleanly in either a CLI push or
+-- Supabase MCP apply_migration.
+--
+-- Removing an enum value needs the whole drop-and-recreate dance the 07-07
+-- migration performed; adding one is a one-liner, and IF NOT EXISTS makes it
+-- a no-op if it somehow already ran.
+
+alter type public.user_role add value if not exists 'parent';

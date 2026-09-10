@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { AdminLayout } from "./AdminLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { Card } from "../../components/ui/Card";
@@ -11,6 +11,7 @@ import { useTeachers } from "../../hooks/useTeachers";
 import { useCourseTypes } from "../../hooks/useCourseTypes";
 import { usePcAssignments } from "../../hooks/usePcAssignments";
 import { useEnrollmentRequests, type NewPackageInput } from "../../hooks/useEnrollmentRequests";
+import { ParentPicker } from "../../components/students/ParentPicker";
 import { useStudentPackages, PRESET_HOURS } from "../../hooks/useStudentPackages";
 import { useBundlePoolSettings, type BundlePoolDef } from "../../hooks/useBundlePoolSettings";
 import { buildEnrollmentInvoicePdf } from "../../utils/buildInvoicePdf";
@@ -102,6 +103,10 @@ export default function AdminEnrollStudentPage() {
   const [firstName, setFirstName] = useState("");
   const [studentEmail, setStudentEmail] = useState("");
   const [pcTeacherId, setPcTeacherId] = useState("");
+  // The household this student joins, if the family has a parent account.
+  // Optional — a student with no parent account is a normal, complete record;
+  // this only decides whether the child also shows up on a parent dashboard.
+  const [parentId, setParentId] = useState<string | null>(null);
 
   // Package fields (both flows) — a repeatable list so one invoice/email/
   // payment link can cover several packages at once instead of forcing a
@@ -119,6 +124,11 @@ export default function AdminEnrollStudentPage() {
   const [error, setError] = useState<string | null>(null);
   const [successInfo, setSuccessInfo] = useState<{ email: string; paymentUrl?: string } | null>(null);
 
+  // Set when /admin/parents/new sent the admin back here after creating a
+  // family mid-enrollment — it reports the account and where its credentials
+  // went, which nothing on this page would otherwise say.
+  const notice = (useLocation().state as { notice?: string } | null)?.notice ?? null;
+
   // Deep-link from a student's "Learner's actual hours" tab
   // (…/enroll?student=S2): jump straight to the renewal flow with that
   // student preselected, so adding hours always goes through this invoice
@@ -132,6 +142,14 @@ export default function AdminEnrollStudentPage() {
       setSelectedStudent(match);
     }
   }, [preselectStudentId, students]);
+
+  // Returning from "+ New parent" (/admin/parents/new?returnTo=…) — that route
+  // sends the admin back here with ?parent=<id> so the family they just added
+  // is already selected and the enrollment carries on where it left off.
+  const preselectParentId = searchParams.get("parent");
+  useEffect(() => {
+    if (preselectParentId) setParentId(preselectParentId);
+  }, [preselectParentId]);
 
   useEffect(() => {
     if (kind !== "renewal" || !selectedStudent) { setExistingPackages([]); return; }
@@ -225,7 +243,7 @@ export default function AdminEnrollStudentPage() {
   function resetForNewSubmission() {
     setSelectedStudent(null);
     setStudentSearch("");
-    setFirstName(""); setStudentEmail(""); setPcTeacherId("");
+    setFirstName(""); setStudentEmail(""); setPcTeacherId(""); setParentId(null);
     setPackages([emptyPackageDraft()]);
     setNote("");
     setExistingPackages([]);
@@ -261,6 +279,10 @@ export default function AdminEnrollStudentPage() {
             first_name: selectedStudent.first_name,
             last_name: selectedStudent.last_name,
             parent_full_name: selectedStudent.parent_full_name,
+            // Read off the student, not the form: a renewal never re-picks a
+            // household, and confirm only ever copies this onto a *new*
+            // student anyway.
+            parent_id: selectedStudent.parent_id ?? null,
             // The invoice/payment-link goes to the "send updates to" email
             // already on file, else the student's own login email as a
             // last resort — nothing here is editable, all read straight
@@ -284,6 +306,7 @@ export default function AdminEnrollStudentPage() {
             // address/country, report card) on first login instead.
             last_name: "",
             parent_full_name: null,
+            parent_id: parentId,
             email: studentEmail.trim(),
             student_email: studentEmail.trim(),
             notification_email: null,
@@ -362,6 +385,12 @@ export default function AdminEnrollStudentPage() {
           </Button>
         }
       />
+
+      {notice && (
+        <p className="text-sm text-lime-700 bg-lime-50 border border-lime-100 rounded-lg px-3 py-2 mb-4">
+          {notice}
+        </p>
+      )}
 
       {successInfo && (
         <Card className="p-4 mb-6 border border-lime-200 bg-lime-50">
@@ -457,6 +486,12 @@ export default function AdminEnrollStudentPage() {
               required
             />
             {coaches.length === 0 && <p className="text-xs text-amber-600">No active Performance Coaches found — mark a teacher as a coach first.</p>}
+            <ParentPicker
+              label="Parent"
+              value={parentId}
+              onChange={setParentId}
+              returnTo="/admin/students/enroll"
+            />
           </div>
         ) : null}
 

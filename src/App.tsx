@@ -45,6 +45,8 @@ import AdminAnalysisPage from "./pages/admin/AdminAnalysisPage";
 import AdminZoomInvoicesPage from "./pages/admin/AdminZoomInvoicesPage";
 import AdminEnrollStudentPage from "./pages/admin/AdminEnrollStudentPage";
 import AdminEnrollmentsPage from "./pages/admin/AdminEnrollmentsPage";
+import AdminParentsPage from "./pages/admin/AdminParentsPage";
+import AdminParentFormPage from "./pages/admin/AdminParentFormPage";
 
 import TeacherHomeworkPage from "./pages/teacher/TeacherHomeworkPage";
 import TeacherHomeworkReviewPage from "./pages/teacher/TeacherHomeworkReviewPage";
@@ -72,6 +74,15 @@ import StudentMyPcPage from "./pages/student/StudentMyPcPage";
 import StudentMyCcPage from "./pages/student/StudentMyCcPage";
 import StudentHomeworkPage from "./pages/student/StudentHomeworkPage";
 import StudentHomeworkAttemptPage from "./pages/student/StudentHomeworkAttemptPage";
+
+import ParentChildrenPage from "./pages/parent/ParentChildrenPage";
+import ParentChildOverviewPage from "./pages/parent/ParentChildOverviewPage";
+import ParentChildActivityPage from "./pages/parent/ParentChildActivityPage";
+import ParentChildSessionsPage from "./pages/parent/ParentChildSessionsPage";
+import ParentChildHomeworkPage from "./pages/parent/ParentChildHomeworkPage";
+import ParentChildReportsPage from "./pages/parent/ParentChildReportsPage";
+import { ParentChildCoachPage, ParentChildCounsellorPage } from "./pages/parent/ParentChildCoachPage";
+import ParentProfilePage from "./pages/parent/ParentProfilePage";
 
 export default function App() {
   return (
@@ -340,6 +351,30 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <AdminZoomInvoicesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/parents"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminParentsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/parents/new"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminParentFormPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/parents/:id/edit"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminParentFormPage />
               </ProtectedRoute>
             }
           />
@@ -640,6 +675,84 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["student"]}>
                 <StudentProfilePage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ----------------- Parent routes ----------------- */}
+          {/* A parent's dashboard spans siblings, so the landing page is the
+              children list rather than one record's overview; every per-child
+              screen carries that child's id in the URL. */}
+          <Route path="/parent" element={<Navigate to="/parent/children" replace />} />
+          <Route
+            path="/parent/children"
+            element={
+              <ProtectedRoute allowedRoles={["parent"]}>
+                <ParentChildrenPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/parent/children/:studentId"
+            element={
+              <ProtectedRoute allowedRoles={["parent"]}>
+                <ParentChildOverviewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/parent/children/:studentId/activity"
+            element={
+              <ProtectedRoute allowedRoles={["parent"]}>
+                <ParentChildActivityPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/parent/children/:studentId/sessions"
+            element={
+              <ProtectedRoute allowedRoles={["parent"]}>
+                <ParentChildSessionsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/parent/children/:studentId/homework"
+            element={
+              <ProtectedRoute allowedRoles={["parent"]}>
+                <ParentChildHomeworkPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/parent/children/:studentId/reports"
+            element={
+              <ProtectedRoute allowedRoles={["parent"]}>
+                <ParentChildReportsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/parent/children/:studentId/coach"
+            element={
+              <ProtectedRoute allowedRoles={["parent"]}>
+                <ParentChildCoachPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/parent/children/:studentId/counsellor"
+            element={
+              <ProtectedRoute allowedRoles={["parent"]}>
+                <ParentChildCounsellorPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/parent/profile"
+            element={
+              <ProtectedRoute allowedRoles={["parent"]}>
+                <ParentProfilePage />
               </ProtectedRoute>
             }
           />

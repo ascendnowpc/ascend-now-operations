@@ -3,7 +3,7 @@
 // Keep these in sync with the SQL migrations as the schema evolves.
 // =========================================================
 
-export type UserRole = "teacher" | "student" | "performance_coach" | "college_counselor" | "admin";
+export type UserRole = "teacher" | "student" | "performance_coach" | "college_counselor" | "admin" | "parent";
 
 export interface AppUser {
   id: string; // uuid, matches auth.users.id
@@ -26,11 +26,17 @@ export interface Student {
   id: string; // e.g. "BATO26-1" (3 letters of first name + 1 of last + enrollment year + sequence)
   first_name: string;
   last_name: string;
-  // The former parent/guardian's details, kept as plain fields on the student
-  // record now that the separate parent role/account has been removed
-  // (2026-07-07 student+parent dashboard merge).
+  // The guardian's contact details, kept as plain fields on the student
+  // record. Independent of `parent_id` below — a family can have contact
+  // details, a parent login, or both.
   parent_full_name: string | null;
   parent_phone_number: string | null;
+  // The parent ACCOUNT this student belongs to, if the family has one
+  // (2026-09-10). Siblings share one parents row, which is what makes them
+  // show up together on that parent's dashboard. Null for every student
+  // enrolled before parent accounts existed, and for any family that
+  // doesn't want one.
+  parent_id: string | null;
   phone_number: string | null; // the student's own phone
   email: string | null; // the student's login email (creates the username)
   // The "send updates to" address — where invoices/notifications are emailed.
@@ -50,6 +56,29 @@ export interface Student {
   school: string | null;
   status: StudentStatus;
   status_changed_at: string | null;
+  created_at: string;
+}
+
+// A household parent/guardian account (2026-09-10). One row owns one login
+// and any number of students — a sibling enrolled later reuses the existing
+// parent rather than creating a second account for the same family, which is
+// what lets the parent dashboard list every child in one place.
+//
+// The id is the same mnemonic format every other person in the system uses
+// (3 letters of first_name + 1 of last_name + 2-digit year + '-' + sequence,
+// e.g. SARK26-1) — see supabase/migrations/20260910000100.
+//
+// Access is read-only by design: a parent sees what their children see and
+// can change nothing. Parent details are edited by an admin from
+// /admin/parents/:id/edit.
+export interface Parent {
+  id: string; // e.g. "SARK26-1"
+  first_name: string;
+  last_name: string;
+  email: string | null; // where credentials were sent; also the duplicate check when adding a sibling
+  phone_number: string | null;
+  user_id: string | null; // the login account, set by create-parent-with-user
+  is_active: boolean;
   created_at: string;
 }
 
@@ -557,6 +586,11 @@ export interface EnrollmentRequest {
   first_name: string;
   last_name: string;
   parent_full_name: string | null; // the guardian's name, kept for the student record
+  // The parent ACCOUNT picked on the enroll form, copied onto the new
+  // student's `parent_id` when the request is confirmed (2026-09-10). The
+  // account itself is created up front at /admin/parents/new, so this is
+  // only ever an existing parent's id.
+  parent_id: string | null;
   // The "send updates to" contact — invoice + payment link + notification
   // recipient. Set to the notification_email the intake form captured, or the
   // student_email when that was left blank (there is no parent login anymore).

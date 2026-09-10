@@ -99,6 +99,7 @@ export function useEnrollmentRequests() {
     first_name: string;
     last_name: string;
     parent_full_name?: string | null;
+    parent_id?: string | null; // the parent ACCOUNT, copied onto students.parent_id on confirm
     email: string; // "send updates to" contact (notification email, or student email fallback)
     student_email?: string | null; // creates the student login
     notification_email?: string | null; // the second "send updates to" address as entered
