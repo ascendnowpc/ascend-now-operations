@@ -12,12 +12,14 @@
 // On confirm:
 //   - new_student: creates the students row and a SINGLE auth.users/
 //     public.users login — the student account (student_email, role student).
-//     There is no parent account anymore; the guardian's name/phone are kept
-//     as plain fields on the student row, and a "send updates to"
-//     notification_email (which may match or differ from the login email) is
-//     recorded. Also creates a fresh student_package (or bundle of pools, see
-//     below) and a package_topups row per package line; emails the student
-//     their credentials + one combined package confirmation.
+//     The guardian's name/phone are kept as plain fields on the student row,
+//     and a "send updates to" notification_email (which may match or differ
+//     from the login email) is recorded. If the enroll form picked a parent
+//     ACCOUNT, its id is copied onto the student too (2026-09-10) — that
+//     login is created separately by create-parent-with-user, never here.
+//     Also creates a fresh student_package (or bundle of pools, see below)
+//     and a package_topups row per package line; emails the student their
+//     credentials + one combined package confirmation.
 //   - renewal: tops up the student's existing *unlocked* package for each
 //     line's course type, or — if it doesn't have one (never had one, or the
 //     only one is locked) — starts a brand-new package generation that
@@ -275,13 +277,14 @@ ${paymentUrl ? `<div style="text-align:center;margin:24px 0 8px;"><a href="${pay
     let studentId = enrollment.student_id as string | null;
     let credentials: { username: string; password: string } | null = null;
 
-    // A student now has exactly one login (there is no separate parent
-    // account anymore). It's created from `student_email` — the address that
-    // becomes the username — falling back to `email` (the "send updates to"
-    // notification address) only for a legacy request that never captured a
-    // separate student email. `notificationEmail` is where every non-
-    // credential mail goes (invoice/renewal/threshold), falling back to the
-    // student's own login email when it's blank.
+    // A student has exactly one login of their own. It's created from
+    // `student_email` — the address that becomes the username — falling back
+    // to `email` (the "send updates to" notification address) only for a
+    // legacy request that never captured a separate student email.
+    // `notificationEmail` is where every non-credential mail goes
+    // (invoice/renewal/threshold), falling back to the student's own login
+    // email when it's blank. A parent account, when the family has one, is a
+    // separate login entirely — see parent_id below.
     const studentEmail = ((enrollment.student_email as string | null) ?? enrollment.email ?? "").trim();
     const notificationEmail = ((enrollment.notification_email as string | null) ?? enrollment.email ?? studentEmail ?? "").trim();
 
@@ -305,11 +308,17 @@ ${paymentUrl ? `<div style="text-align:center;margin:24px 0 8px;"><a href="${pay
         .insert({
           first_name: enrollment.first_name,
           last_name: enrollment.last_name,
-          // Parent details are kept as plain fields on the student row now
-          // (no separate parents table / login) — name + phone preserved so
-          // the merged single-record view still shows who the guardian is.
+          // Guardian name + phone stay plain contact fields on the student
+          // row, independent of the parent ACCOUNT below — a family can have
+          // one, the other, or both.
           parent_full_name: enrollment.parent_full_name,
           parent_phone_number: enrollment.phone_number,
+          // The parent account picked on the enroll form, if any. Its login
+          // and credentials email were handled up front by
+          // create-parent-with-user, so there is nothing to create here — the
+          // student just joins the household, which is what makes their data
+          // visible on that parent's dashboard (can_view_student, 2026-09-10).
+          parent_id: enrollment.parent_id ?? null,
           email: studentEmail,
           // The "send updates to" address; may match the student email or
           // differ. Falls back to the student email when left blank.
@@ -727,7 +736,7 @@ ${loginUrl ? `<div style="text-align:center;margin:20px 0 8px;"><a href="${login
         } else {
           // Renewal confirmation — sent to the "send updates to" address
           // (enrollment.email / notification_email) and the student's own
-          // login email, deduped. No separate parent account exists anymore.
+          // login email, deduped.
           const { data: studentRow } = await serviceClient.from("students").select("email, notification_email").eq("id", studentId).maybeSingle();
           const renewalRecipients = Array.from(
             new Set(

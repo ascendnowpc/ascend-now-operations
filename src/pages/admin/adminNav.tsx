@@ -36,6 +36,7 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
     icon: <IconUsers />,
     children: [
       { label: "Students", to: "/admin/students", icon: <IconUsers /> },
+      { label: "Parents", to: "/admin/parents", icon: <IconUsers /> },
       { label: "Add / Renew Student", to: "/admin/students/enroll", icon: <IconPlus /> },
       { label: "Enrollments", to: "/admin/enrollments", icon: <IconClipboard /> },
       { label: "Learner's actual hours", to: "/admin/packages", icon: <IconPackage /> },

@@ -65,6 +65,7 @@ export function ProtectedRoute({ allowedRoles, children }: ProtectedRouteProps) 
       return <Navigate to="/teacher" replace />;
     }
     if (profile.role === "student") return <Navigate to="/student" replace />;
+    if (profile.role === "parent") return <Navigate to="/parent" replace />;
     return <Navigate to="/login" replace />;
   }
 
