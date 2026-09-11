@@ -102,6 +102,79 @@ export function packageUsageSplit(
   };
 }
 
+/**
+ * The hours ONE child spent from a package.
+ *
+ * A student-owned pool is that student's by definition, so the stored
+ * `hours_used` already is their figure. A family pool is shared, so their
+ * share has to come from the per-sibling usage rows — a child who has never
+ * drawn on the pool has no row at all, which means zero, not missing.
+ *
+ * This is what a page about one child shows in a "used" column: on a shared
+ * Academic pool where one sibling spent 86.75 hrs and the other 0.75, the
+ * pool's own `hours_used` of 87.5 is true of the family and of neither child.
+ *
+ * `usageByPackage` empty for a pool that has hours on it means the usage
+ * hasn't loaded yet (or wasn't readable) rather than that nobody spent
+ * anything — the same session logs feed both figures, so hours on the pool
+ * guarantee at least one usage row. Fall back to the pool's total there
+ * instead of reporting a confident zero.
+ */
+export function studentHoursUsed(
+  pkg: Pick<StudentPackage, "id" | "student_id" | "parent_id" | "hours_used">,
+  studentId: string,
+  usageByPackage: Map<number, SiblingUsage[]>,
+): number {
+  // A pool owned by a different student is none of this one's hours. In
+  // practice the list is already their own pools plus the family's, so this
+  // only ever states the rule rather than filtering anything out.
+  if (!isFamilyPackage(pkg)) return pkg.student_id === studentId ? pkg.hours_used ?? 0 : 0;
+  const rows = usageByPackage.get(pkg.id) ?? [];
+  if (rows.length === 0) return pkg.hours_used ?? 0;
+  return rows.find((r) => r.studentId === studentId)?.hours ?? 0;
+}
+
+export interface StudentPackageTotals {
+  /** Hours bought into the pools, family pools counted in full. */
+  purchased: number;
+  /** Hours THIS child spent — a sibling's spending is not theirs. */
+  used: number;
+  /** Hours actually left to book, so every sibling's spending counts here. */
+  remaining: number;
+}
+
+/**
+ * A child's headline package numbers.
+ *
+ * `used` is personal and `remaining` is the pool's, and that asymmetry is
+ * deliberate: "how much has this child had" and "how much is left to book"
+ * are different questions, and on a shared pool only the second one involves
+ * a sibling. So purchased − used does not have to equal remaining, and on a
+ * pool two children have drawn on it won't.
+ *
+ * Remaining is clamped per pool rather than on the total, matching the
+ * per-row figure in the packages table: an overspent pool is 0 remaining, and
+ * must not quietly eat another pool's unused hours.
+ */
+export function studentPackageTotals(
+  packages: Pick<
+    StudentPackage,
+    "id" | "student_id" | "parent_id" | "hours_used" | "total_hours_purchased"
+  >[],
+  studentId: string,
+  usageByPackage: Map<number, SiblingUsage[]>,
+): StudentPackageTotals {
+  return packages.reduce<StudentPackageTotals>(
+    (totals, p) => ({
+      purchased: totals.purchased + (p.total_hours_purchased ?? 0),
+      used: totals.used + studentHoursUsed(p, studentId, usageByPackage),
+      remaining:
+        totals.remaining + Math.max((p.total_hours_purchased ?? 0) - (p.hours_used ?? 0), 0),
+    }),
+    { purchased: 0, used: 0, remaining: 0 },
+  );
+}
+
 // The colour a given child's hours are drawn in. Assigned by position within
 // the family rather than randomly or by hashing a name, so the eldest is
 // always the first colour and a child keeps their colour across every screen —

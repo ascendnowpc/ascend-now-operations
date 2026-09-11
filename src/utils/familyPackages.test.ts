@@ -3,6 +3,8 @@ import {
   isFamilyPackage,
   packagesAvailableToStudent,
   packageUsageSplit,
+  studentHoursUsed,
+  studentPackageTotals,
   siblingColorMap,
   siblingColor,
   familyColorOrder,
@@ -177,6 +179,89 @@ describe("siblingColorMap — a child keeps their colour everywhere", () => {
 
   it("falls back to a neutral colour for a student not in the family list", () => {
     expect(siblingColor(siblingColorMap(["ELD26-1"]), "NOPE26-9")).toEqual(UNKNOWN_SIBLING_COLOR);
+  });
+});
+
+describe("studentHoursUsed — one child's hours out of a shared pool", () => {
+  // The shape that started this: a parent looking at one child's Activity page
+  // saw the pool's 87.5 hrs, of which 0.75 were the sibling's.
+  const shared = pkg({ id: 7, parent_id: "SARK26-1", total_hours_purchased: 100, hours_used: 87.5 });
+  const split = new Map([[7, [
+    usage({ studentId: "ELD26-1", firstName: "Elder", hours: 86.75 }),
+    usage({ studentId: "YNG26-2", firstName: "Younger", hours: 0.75 }),
+  ]]]);
+
+  it("reports only the hours this child spent, not the pool's total", () => {
+    expect(studentHoursUsed(shared, "ELD26-1", split)).toBe(86.75);
+    expect(studentHoursUsed(shared, "YNG26-2", split)).toBe(0.75);
+  });
+
+  it("is zero for a sibling who has never drawn on the pool", () => {
+    expect(studentHoursUsed(shared, "THIRD26-3", split)).toBe(0);
+  });
+
+  it("uses the stored hours_used for a student-owned pool", () => {
+    const own = pkg({ id: 8, student_id: "ELD26-1", hours_used: 12 });
+    expect(studentHoursUsed(own, "ELD26-1", new Map())).toBe(12);
+  });
+
+  it("falls back to the pool total when a used pool has no usage rows yet", () => {
+    // Hours on the pool guarantee at least one usage row — none means the
+    // aggregate hasn't loaded, and a confident 0 would be a wrong number
+    // rather than a missing one.
+    expect(studentHoursUsed(shared, "ELD26-1", new Map())).toBe(87.5);
+    expect(studentHoursUsed(shared, "ELD26-1", new Map([[7, []]]))).toBe(87.5);
+  });
+
+  it("is zero on an untouched shared pool rather than falling back", () => {
+    const untouched = pkg({ id: 9, parent_id: "SARK26-1", hours_used: 0 });
+    expect(studentHoursUsed(untouched, "ELD26-1", new Map())).toBe(0);
+  });
+});
+
+describe("studentPackageTotals — a child's headline numbers", () => {
+  const packages = [
+    pkg({ id: 7, parent_id: "SARK26-1", total_hours_purchased: 100, hours_used: 87.5 }),
+    pkg({ id: 8, student_id: "ELD26-1", total_hours_purchased: 40, hours_used: 9.25 }),
+  ];
+  const split = new Map([[7, [
+    usage({ studentId: "ELD26-1", hours: 86.75 }),
+    usage({ studentId: "YNG26-2", hours: 0.75 }),
+  ]]]);
+
+  it("counts only this child's hours as used", () => {
+    expect(studentPackageTotals(packages, "ELD26-1", split).used).toBe(96);
+  });
+
+  it("counts every sibling's spending against what is left to book", () => {
+    // 12.5 left of the shared pool even though this child spent 86.75 of it.
+    expect(studentPackageTotals(packages, "ELD26-1", split).remaining).toBe(43.25);
+    expect(studentPackageTotals(packages, "ELD26-1", split).purchased).toBe(140);
+  });
+
+  it("gives the same remaining whichever sibling is being viewed", () => {
+    expect(studentPackageTotals(packages, "YNG26-2", split).remaining).toBe(43.25);
+  });
+
+  it("counts nothing from a pool another student owns outright", () => {
+    // The sibling's own 40-hour pool is not the family's to spend.
+    expect(studentPackageTotals(packages, "YNG26-2", split).used).toBe(0.75);
+  });
+
+  it("clamps an overspent pool at zero instead of eating another pool's hours", () => {
+    const overspent = [
+      pkg({ id: 1, student_id: "ELD26-1", total_hours_purchased: 10, hours_used: 14 }),
+      pkg({ id: 2, student_id: "ELD26-1", total_hours_purchased: 20, hours_used: 0 }),
+    ];
+    expect(studentPackageTotals(overspent, "ELD26-1", new Map()).remaining).toBe(20);
+  });
+
+  it("is all zeroes with no packages", () => {
+    expect(studentPackageTotals([], "ELD26-1", new Map())).toEqual({
+      purchased: 0,
+      used: 0,
+      remaining: 0,
+    });
   });
 });
 

@@ -16,9 +16,8 @@ import {
   sessionLengthSummary,
   noShowBreakdown,
 } from "../../utils/parentActivity";
-import { FamilyUsageBar } from "../../components/students/FamilyUsageBar";
 import { useFamilyPackageUsage } from "../../hooks/useFamilyPackageUsage";
-import { isFamilyPackage, siblingColorMap, familyColorOrder } from "../../utils/familyPackages";
+import { isFamilyPackage, studentHoursUsed, studentPackageTotals } from "../../utils/familyPackages";
 import type { Student, StudentPackage } from "../../types/database";
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -51,10 +50,14 @@ function ActivityView({ student }: { student: Student }) {
   const [packages, setPackages] = useState<StudentPackage[]>([]);
   const [packagesLoading, setPackagesLoading] = useState(true);
 
-  // Who actually spent the family's hours. A parent sees every child's slice;
-  // the same RPC backs each child's own view, so the numbers agree.
-  const { usageByPackage } = useFamilyPackageUsage(packages.filter(isFamilyPackage).map((p) => p.id));
-  const colors = siblingColorMap(familyColorOrder(usageByPackage.values()));
+  // A shared pool's `hours_used` belongs to the family, and this page is about
+  // one child, so the per-sibling split is what turns it back into "what has
+  // this child had". Only their own slice is shown — a page headed with one
+  // child's name reading out a sibling's hours is what made it confusing; the
+  // family-wide split lives on the parent's packages card instead.
+  const { usageByPackage, loading: usageLoading } = useFamilyPackageUsage(
+    packages.filter(isFamilyPackage).map((p) => p.id),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -69,7 +72,10 @@ function ActivityView({ student }: { student: Student }) {
     return () => { cancelled = true; };
   }, [student.id, fetchPackagesForStudent]);
 
-  if (logsLoading || packagesLoading) {
+  // The usage aggregate is part of the loading gate rather than something the
+  // numbers settle into: without it a shared pool would paint the family's
+  // hours first and correct itself to this child's a moment later.
+  if (logsLoading || packagesLoading || usageLoading) {
     return (
       <Card className="p-5">
         <div className="flex items-center gap-2 text-navy-300 text-sm"><Spinner /> Loading…</div>
@@ -92,17 +98,16 @@ function ActivityView({ student }: { student: Student }) {
   const subjectName = (subjectId: number | null, curriculumId: number | null) =>
     getSessionSubjectLabel(subjectId, curriculumId, subjectLookup, curriculumLookup);
 
-  // `hours_used` is the DB-maintained figure (a trigger on session_logs keeps
-  // it current), so it's the authoritative "used" total rather than anything
-  // recomputed here.
-  const totalPurchased = packages.reduce((sum, p) => sum + (p.total_hours_purchased ?? 0), 0);
-  const totalUsed = packages.reduce((sum, p) => sum + (p.hours_used ?? 0), 0);
+  // Used is this child's alone; remaining is the pools', because that is what
+  // is actually left to book. On a pool a sibling has drawn on, the two
+  // therefore don't add up to purchased — see studentPackageTotals.
+  const totals = studentPackageTotals(packages, student.id, usageByPackage);
 
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Stat label="Hours remaining" value={formatHours(Math.max(totalPurchased - totalUsed, 0))} hint={`of ${formatHours(totalPurchased)} purchased`} />
-        <Stat label="Hours used" value={formatHours(totalUsed)} />
+        <Stat label="Hours remaining" value={formatHours(totals.remaining)} hint={`of ${formatHours(totals.purchased)} purchased`} />
+        <Stat label="Hours used" value={formatHours(totals.used)} />
         <Stat
           label="Average lesson"
           value={length.averageHours != null ? `${formatHours(length.averageHours)} hrs` : "—"}
@@ -130,7 +135,7 @@ function ActivityView({ student }: { student: Student }) {
                 <tr className="text-left text-xs font-semibold text-navy-400 uppercase tracking-wide">
                   <th className="py-2 pr-4">Package</th>
                   <th className="py-2 pr-4 text-right">Purchased</th>
-                  <th className="py-2 pr-4 text-right">Used</th>
+                  <th className="py-2 pr-4 text-right">{student.first_name}</th>
                   <th className="py-2 text-right">Remaining</th>
                 </tr>
               </thead>
@@ -142,28 +147,11 @@ function ActivityView({ student }: { student: Student }) {
                       {p.pool_label ? <span className="text-navy-400"> · {p.pool_label}</span> : null}
                     </td>
                     <td className="py-2 pr-4 text-right text-navy-700">{formatHours(p.total_hours_purchased ?? 0)}</td>
-                    <td className="py-2 pr-4 text-right text-navy-700">{formatHours(p.hours_used ?? 0)}</td>
+                    <td className="py-2 pr-4 text-right text-navy-700">
+                      {formatHours(studentHoursUsed(p, student.id, usageByPackage))}
+                    </td>
                     <td className="py-2 text-right font-semibold text-navy-700">
                       {formatHours(Math.max((p.total_hours_purchased ?? 0) - (p.hours_used ?? 0), 0))}
-                    </td>
-                  </tr>
-                ))}
-                {/* A shared pool gets its own row underneath showing which
-                    child spent what — the balance above is the family's, not
-                    this one child's. */}
-                {packages.filter((p) => isFamilyPackage(p) && (usageByPackage.get(p.id) ?? []).length > 1).map((p) => (
-                  <tr key={`split-${p.id}`} className="border-t border-navy-50">
-                    <td colSpan={4} className="py-3">
-                      <p className="text-xs font-medium text-navy-400 mb-1.5">
-                        {courseTypeName(p.course_type_id)}
-                        {p.pool_label ? ` · ${p.pool_label}` : ""} — shared
-                      </p>
-                      <FamilyUsageBar
-                        usage={usageByPackage.get(p.id) ?? []}
-                        purchasedHours={p.total_hours_purchased ?? 0}
-                        colors={colors}
-                        highlightStudentId={student.id}
-                      />
                     </td>
                   </tr>
                 ))}
