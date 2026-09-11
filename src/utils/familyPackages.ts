@@ -114,11 +114,11 @@ export function packageUsageSplit(
  * Academic pool where one sibling spent 86.75 hrs and the other 0.75, the
  * pool's own `hours_used` of 87.5 is true of the family and of neither child.
  *
- * `usageByPackage` empty for a pool that has hours on it means the usage
- * hasn't loaded yet (or wasn't readable) rather than that nobody spent
- * anything — the same session logs feed both figures, so hours on the pool
- * guarantee at least one usage row. Fall back to the pool's total there
- * instead of reporting a confident zero.
+ * A pool with no usage entry at all hasn't been fetched yet, and falls back to
+ * the pool's own total rather than reporting a confident zero. An entry that
+ * came back EMPTY is different — that is an answer, so every child reads zero.
+ * (The two are worth keeping apart: a caller drawing one column per child
+ * would otherwise show the whole pool's hours once per child.)
  */
 export function studentHoursUsed(
   pkg: Pick<StudentPackage, "id" | "student_id" | "parent_id" | "hours_used">,
@@ -129,8 +129,8 @@ export function studentHoursUsed(
   // practice the list is already their own pools plus the family's, so this
   // only ever states the rule rather than filtering anything out.
   if (!isFamilyPackage(pkg)) return pkg.student_id === studentId ? pkg.hours_used ?? 0 : 0;
-  const rows = usageByPackage.get(pkg.id) ?? [];
-  if (rows.length === 0) return pkg.hours_used ?? 0;
+  const rows = usageByPackage.get(pkg.id);
+  if (rows == null) return pkg.hours_used ?? 0;
   return rows.find((r) => r.studentId === studentId)?.hours ?? 0;
 }
 
@@ -235,7 +235,45 @@ export function familyColorOrder(usageByPackage: Iterable<SiblingUsage[]>): stri
   for (const rows of usageByPackage) {
     for (const row of rows) ids.add(row.studentId);
   }
-  return Array.from(ids).sort((a, b) => idSeqNumber(a) - idSeqNumber(b) || a.localeCompare(b));
+  return Array.from(ids).sort(byEnrollmentOrder);
+}
+
+/** Enrollment order, read straight off the trailing sequence number of the id. */
+function byEnrollmentOrder(a: string, b: string): number {
+  return idSeqNumber(a) - idSeqNumber(b) || a.localeCompare(b);
+}
+
+export interface UsageColumn {
+  studentId: string;
+  firstName: string;
+}
+
+/**
+ * The children a per-child packages table gives a column to.
+ *
+ * Every child who has actually drawn on one of these pools, plus the child
+ * whose page it is — they keep their column on a day they have spent nothing.
+ * A sibling who has touched none of the pools gets no column, so an ordinary
+ * one-child family sees exactly one.
+ *
+ * Ordered by enrollment, the same order that fixes each child's colour
+ * everywhere else, so the columns don't reshuffle between siblings' pages.
+ * Names come from the usage rows — on a student's own screen that is the only
+ * place a sibling's name is readable at all — with `viewed` supplying their
+ * own, since there may be no row of theirs to read it from.
+ */
+export function familyUsageColumns(
+  usageByPackage: Map<number, SiblingUsage[]>,
+  viewed: UsageColumn,
+): UsageColumn[] {
+  const names = new Map<string, string>();
+  for (const rows of usageByPackage.values()) {
+    for (const row of rows) names.set(row.studentId, row.firstName);
+  }
+  if (!names.has(viewed.studentId)) names.set(viewed.studentId, viewed.firstName);
+  return Array.from(names.keys())
+    .sort(byEnrollmentOrder)
+    .map((studentId) => ({ studentId, firstName: names.get(studentId) as string }));
 }
 
 /** The fallback for a student who isn't in the family list (shouldn't happen). */
