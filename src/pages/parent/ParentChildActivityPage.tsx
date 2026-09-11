@@ -17,7 +17,7 @@ import {
   noShowBreakdown,
 } from "../../utils/parentActivity";
 import { useFamilyPackageUsage } from "../../hooks/useFamilyPackageUsage";
-import { isFamilyPackage, studentHoursUsed, studentPackageTotals } from "../../utils/familyPackages";
+import { isFamilyPackage, familyUsageColumns, studentHoursUsed, studentPackageTotals } from "../../utils/familyPackages";
 import type { Student, StudentPackage } from "../../types/database";
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -52,9 +52,8 @@ function ActivityView({ student }: { student: Student }) {
 
   // A shared pool's `hours_used` belongs to the family, and this page is about
   // one child, so the per-sibling split is what turns it back into "what has
-  // this child had". Only their own slice is shown — a page headed with one
-  // child's name reading out a sibling's hours is what made it confusing; the
-  // family-wide split lives on the parent's packages card instead.
+  // this child had" — a column each, the viewed child's highlighted. Purchased
+  // and Remaining stay the pool's, so the row adds up across the children.
   const { usageByPackage, loading: usageLoading } = useFamilyPackageUsage(
     packages.filter(isFamilyPackage).map((p) => p.id),
   );
@@ -98,10 +97,20 @@ function ActivityView({ student }: { student: Student }) {
   const subjectName = (subjectId: number | null, curriculumId: number | null) =>
     getSessionSubjectLabel(subjectId, curriculumId, subjectLookup, curriculumLookup);
 
-  // Used is this child's alone; remaining is the pools', because that is what
-  // is actually left to book. On a pool a sibling has drawn on, the two
-  // therefore don't add up to purchased — see studentPackageTotals.
+  // The tiles read this child's used hours against the pools' remaining ones,
+  // because what is left to book is a family fact — so once a sibling has
+  // spent anything, purchased − used won't equal it. The table below is where
+  // that difference is accounted for, a column per child.
   const totals = studentPackageTotals(packages, student.id, usageByPackage);
+
+  // One column per child who has drawn on these pools, this child's always
+  // among them. With no sibling to tell it apart from, the highlight would be
+  // marking the only column there is, so it only appears once there are two.
+  const usageColumns = familyUsageColumns(usageByPackage, {
+    studentId: student.id,
+    firstName: student.first_name,
+  });
+  const isViewed = (studentId: string) => usageColumns.length > 1 && studentId === student.id;
 
   return (
     <div className="flex flex-col gap-6">
@@ -135,7 +144,14 @@ function ActivityView({ student }: { student: Student }) {
                 <tr className="text-left text-xs font-semibold text-navy-400 uppercase tracking-wide">
                   <th className="py-2 pr-4">Package</th>
                   <th className="py-2 pr-4 text-right">Purchased</th>
-                  <th className="py-2 pr-4 text-right">{student.first_name}</th>
+                  {usageColumns.map((c) => (
+                    <th
+                      key={c.studentId}
+                      className={`py-2 px-3 text-right ${isViewed(c.studentId) ? "bg-sky-50 text-sky-600" : ""}`}
+                    >
+                      {c.firstName}
+                    </th>
+                  ))}
                   <th className="py-2 text-right">Remaining</th>
                 </tr>
               </thead>
@@ -147,9 +163,16 @@ function ActivityView({ student }: { student: Student }) {
                       {p.pool_label ? <span className="text-navy-400"> · {p.pool_label}</span> : null}
                     </td>
                     <td className="py-2 pr-4 text-right text-navy-700">{formatHours(p.total_hours_purchased ?? 0)}</td>
-                    <td className="py-2 pr-4 text-right text-navy-700">
-                      {formatHours(studentHoursUsed(p, student.id, usageByPackage))}
-                    </td>
+                    {usageColumns.map((c) => (
+                      <td
+                        key={c.studentId}
+                        className={`py-2 px-3 text-right ${
+                          isViewed(c.studentId) ? "bg-sky-50 text-sky-700 font-semibold" : "text-navy-700"
+                        }`}
+                      >
+                        {formatHours(studentHoursUsed(p, c.studentId, usageByPackage))}
+                      </td>
+                    ))}
                     <td className="py-2 text-right font-semibold text-navy-700">
                       {formatHours(Math.max((p.total_hours_purchased ?? 0) - (p.hours_used ?? 0), 0))}
                     </td>

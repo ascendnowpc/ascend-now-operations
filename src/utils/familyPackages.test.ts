@@ -5,6 +5,7 @@ import {
   packageUsageSplit,
   studentHoursUsed,
   studentPackageTotals,
+  familyUsageColumns,
   siblingColorMap,
   siblingColor,
   familyColorOrder,
@@ -205,12 +206,15 @@ describe("studentHoursUsed — one child's hours out of a shared pool", () => {
     expect(studentHoursUsed(own, "ELD26-1", new Map())).toBe(12);
   });
 
-  it("falls back to the pool total when a used pool has no usage rows yet", () => {
-    // Hours on the pool guarantee at least one usage row — none means the
-    // aggregate hasn't loaded, and a confident 0 would be a wrong number
-    // rather than a missing one.
+  it("falls back to the pool total for a used pool that hasn't been fetched", () => {
+    // A confident 0 would be a wrong number rather than a missing one.
     expect(studentHoursUsed(shared, "ELD26-1", new Map())).toBe(87.5);
-    expect(studentHoursUsed(shared, "ELD26-1", new Map([[7, []]]))).toBe(87.5);
+  });
+
+  it("does not fall back once the usage has come back empty", () => {
+    // An empty answer is an answer. Falling back here would hand the whole
+    // pool's hours to every child at once in a column-per-child table.
+    expect(studentHoursUsed(shared, "ELD26-1", new Map([[7, []]]))).toBe(0);
   });
 
   it("is zero on an untouched shared pool rather than falling back", () => {
@@ -262,6 +266,53 @@ describe("studentPackageTotals — a child's headline numbers", () => {
       used: 0,
       remaining: 0,
     });
+  });
+});
+
+describe("familyUsageColumns — a column per child, on a page about one of them", () => {
+  const viewed = { studentId: "YNG26-2", firstName: "Younger" };
+
+  it("gives every child who has drawn on the pools a column", () => {
+    const usageByPackage = new Map([[1, [
+      usage({ studentId: "YNG26-2", firstName: "Younger" }),
+      usage({ studentId: "ELD26-1", firstName: "Elder" }),
+    ]]]);
+    expect(familyUsageColumns(usageByPackage, viewed)).toEqual([
+      { studentId: "ELD26-1", firstName: "Elder" },
+      { studentId: "YNG26-2", firstName: "Younger" },
+    ]);
+  });
+
+  it("keeps the viewed child's column when they have spent nothing at all", () => {
+    const usageByPackage = new Map([[1, [usage({ studentId: "ELD26-1", firstName: "Elder" })]]]);
+    expect(familyUsageColumns(usageByPackage, viewed)).toEqual([
+      { studentId: "ELD26-1", firstName: "Elder" },
+      { studentId: "YNG26-2", firstName: "Younger" },
+    ]);
+  });
+
+  it("is one column for a child whose siblings have touched none of the pools", () => {
+    const usageByPackage = new Map([[1, [usage({ studentId: "YNG26-2", firstName: "Younger" })]]]);
+    expect(familyUsageColumns(usageByPackage, viewed)).toEqual([
+      { studentId: "YNG26-2", firstName: "Younger" },
+    ]);
+    expect(familyUsageColumns(new Map(), viewed)).toEqual([viewed]);
+  });
+
+  it("orders columns by enrollment, so they don't reshuffle between siblings' pages", () => {
+    // Enrollment order comes off the id's trailing number, not its letters:
+    // alphabetically the third child (THRD26-11) would sort above the second.
+    const usageByPackage = new Map([
+      [1, [usage({ studentId: "THRD26-11", firstName: "Third" })]],
+      [2, [usage({ studentId: "ELD26-1", firstName: "Elder" })]],
+    ]);
+    const ids = familyUsageColumns(usageByPackage, viewed).map((c) => c.studentId);
+    expect(ids).toEqual(["ELD26-1", "YNG26-2", "THRD26-11"]);
+  });
+
+  it("takes a sibling's name from the usage rows, the only place a student can read it", () => {
+    const usageByPackage = new Map([[1, [usage({ studentId: "ELD26-1", firstName: "Elder" })]]]);
+    expect(familyUsageColumns(usageByPackage, viewed)[0].firstName).toBe("Elder");
   });
 });
 
