@@ -10,7 +10,8 @@ import { IconPlus } from "../../components/ui/icons";
 import { useParents } from "../../hooks/useParents";
 import { useStudents } from "../../hooks/useStudents";
 import { childrenOf, parentMatchesSearch } from "../../utils/parentDirectory";
-import { useFamilyPackages } from "../../hooks/useStudentPackages";
+import { useAllPackages } from "../../hooks/useStudentPackages";
+import { householdPackages, totalPackageHours } from "../../utils/householdPackages";
 import { formatHours } from "../../utils/formatHours";
 import type { Parent } from "../../types/database";
 
@@ -27,9 +28,9 @@ import type { Parent } from "../../types/database";
 export default function AdminParentsPage() {
   const { parents, loading } = useParents();
   const { students } = useStudents();
-  // Every family pool in one read, so the list can show each family's balance
-  // without a query per row.
-  const { familyPackages } = useFamilyPackages();
+  // Every package and membership row in one read, so the list can show each
+  // family's balance without a query per row.
+  const { packages, members } = useAllPackages();
   const navigate = useNavigate();
 
   const [search, setSearch] = useState("");
@@ -65,13 +66,17 @@ export default function AdminParentsPage() {
       },
     },
     {
-      header: "Hours",
+      // Left / bought across everything this household holds — every child's
+      // own packages plus any shared ones, each counted once however many
+      // children draw on it. It used to count only the shared pools, which read
+      // as "—" for a family whose hours all happen to be individual.
+      header: "Hours left",
       accessor: (p) => {
-        const pkgs = familyPackages.filter((row) => row.parent_id === p.id);
+        const kids = childrenOf(students, p.id);
+        const pkgs = householdPackages(packages, members, kids.map((c) => c.id));
         if (pkgs.length === 0) return "—";
-        const purchased = pkgs.reduce((sum, row) => sum + (row.total_hours_purchased ?? 0), 0);
-        const used = pkgs.reduce((sum, row) => sum + (row.hours_used ?? 0), 0);
-        return `${formatHours(Math.max(purchased - used, 0))} / ${formatHours(purchased)}`;
+        const totals = totalPackageHours(pkgs);
+        return `${formatHours(totals.remaining)} / ${formatHours(totals.purchased)}`;
       },
       className: "whitespace-nowrap",
     },
@@ -123,7 +128,7 @@ export default function AdminParentsPage() {
         rows={filtered}
         getRowId={(p) => p.id}
         loading={loading}
-        onRowClick={(p) => navigate(`/admin/parents/${p.id}/packages`)}
+        onRowClick={(p) => navigate(`/admin/parents/${p.id}`)}
         onEdit={(p) => navigate(`/admin/parents/${p.id}/edit`)}
         emptyMessage="No parent accounts yet."
       />

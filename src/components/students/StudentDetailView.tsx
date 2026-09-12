@@ -758,14 +758,21 @@ export function StudentDetailView({ role, backPath, backLabel }: {
     return (
       <div key={pkg.id} className="border border-navy-100 rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${courseTypeBadge(ct?.color ?? null)}`}>
-            {pkg.pool_label ?? ct?.name ?? `Type ${pkg.course_type_id}`}
+          <span className="flex items-center gap-2">
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${courseTypeBadge(ct?.color ?? null)}`}>
+              {pkg.pool_label ?? ct?.name ?? `Type ${pkg.course_type_id}`}
+            </span>
+            {isFamilyPackage(pkg) && (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full border border-sky-200 bg-sky-50 text-sky-600">
+                Shared
+              </span>
+            )}
           </span>
           <span className={`text-sm font-bold ${pctUsed >= 0.9 ? "text-red-600" : pctUsed >= 0.75 ? "text-yellow-600" : "text-green-600"}`}>
             {formatHours(hoursRemaining)} hrs remaining
           </span>
         </div>
-        {/* A FAMILY pool's balance belongs to the household, not to this one
+        {/* A SHARED pool's balance belongs to the household, not to this one
             student, so show which child actually spent it once more than one
             has (2026-09-11). */}
         {isFamilyPackage(pkg) && (familyUsageByPackage.get(pkg.id) ?? []).length > 1 ? (

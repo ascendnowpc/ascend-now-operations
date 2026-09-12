@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
@@ -49,7 +49,7 @@ import AdminStudentFormPage from "./pages/admin/AdminStudentFormPage";
 import AdminEnrollmentsPage from "./pages/admin/AdminEnrollmentsPage";
 import AdminParentsPage from "./pages/admin/AdminParentsPage";
 import AdminParentFormPage from "./pages/admin/AdminParentFormPage";
-import AdminParentPackagesPage from "./pages/admin/AdminParentPackagesPage";
+import AdminParentDetailPage from "./pages/admin/AdminParentDetailPage";
 
 import TeacherHomeworkPage from "./pages/teacher/TeacherHomeworkPage";
 import TeacherHomeworkReviewPage from "./pages/teacher/TeacherHomeworkReviewPage";
@@ -87,6 +87,12 @@ import ParentChildReportsPage from "./pages/parent/ParentChildReportsPage";
 import { ParentChildCoachPage, ParentChildCounsellorPage } from "./pages/parent/ParentChildCoachPage";
 import ParentProfilePage from "./pages/parent/ParentProfilePage";
 import { INVOICE_PAYMENT_FLOW_ENABLED } from "./utils/enrollmentFlow";
+
+// Keeps links to the old /admin/parents/:id/packages working.
+function ParentPackagesRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={`/admin/parents/${id}`} replace />;
+}
 
 export default function App() {
   return (
@@ -383,12 +389,18 @@ export default function App() {
             }
           />
           <Route
-            path="/admin/parents/:id/packages"
+            path="/admin/parents/:id"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
-                <AdminParentPackagesPage />
+                <AdminParentDetailPage />
               </ProtectedRoute>
             }
+          />
+          {/* The old hours-only view; everything it showed is on the detail
+              page above, alongside each child's individual packages. */}
+          <Route
+            path="/admin/parents/:id/packages"
+            element={<ParentPackagesRedirect />}
           />
           <Route
             path="/admin/parents/:id/edit"

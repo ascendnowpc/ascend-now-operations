@@ -13,6 +13,13 @@ import { useStudentPackages } from "../../hooks/useStudentPackages";
 import type { PackageTopup, Student, StudentPackage } from "../../types/database";
 import { supabase } from "../../lib/supabaseClient";
 import { formatHours } from "../../utils/formatHours";
+import {
+  membersByPackage,
+  packagesForStudent,
+  packageStudentIds,
+  isSharedPackage,
+  type PackageMembers,
+} from "../../utils/householdPackages";
 
 const PROGRAM_TYPE_TO_COURSE_TYPE_NAME: Record<string, string> = {
   academic: "Academic",
@@ -67,6 +74,7 @@ export default function AdminPackagesPage() {
   const { lockPackage, unlockPackage } = useStudentPackages();
 
   const [studentRows, setStudentRows] = useState<StudentRow[]>([]);
+  const [members, setMembers] = useState<PackageMembers>(new Map());
   const [sessionMap, setSessionMap] = useState<Map<string, { course_type_id: number | null; student_package_id: number | null; session_duration_hrs: number | null; no_show_type: string | null }[]>>(new Map());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -74,9 +82,14 @@ export default function AdminPackagesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [{ data: students }, { data: packages }, { data: sessions }] = await Promise.all([
+    const [{ data: students }, { data: packages }, { data: memberRows }, { data: sessions }] = await Promise.all([
       supabase.from("students").select("*").order("id"),
       supabase.from("student_packages").select("*, package_topups(*)"),
+      // Who draws on the SHARED pools. Without this the list filtered packages
+      // by `student_id` alone, so a parent-owned pool — which has none —
+      // appeared under nobody at all and a family's shared hours were simply
+      // missing from this page (fixed 2026-09-13).
+      supabase.from("student_package_members").select("student_package_id, student_id"),
       // No no_show_type filter here — No Show + still bills (see
       // utils/noShow.ts), so excluding every no-show at the query level
       // undercounted hours used vs. the student-detail page, which fetches
@@ -95,11 +108,16 @@ export default function AdminPackagesPage() {
     }
     setSessionMap(sMap as typeof sessionMap);
 
-    // Attach packages to students
+    // Attach packages to students — their own AND the shared pools they are
+    // named on, so a shared pool shows under both children who can spend it.
+    // It is labelled as shared on the card, and the counts below are taken over
+    // distinct package ids so listing it twice doesn't double the totals.
     const pkgs = (packages ?? []) as PackageWithTopups[];
+    const memberMap = membersByPackage((memberRows ?? []) as { student_package_id: number; student_id: string }[]);
+    setMembers(memberMap);
     const rows = (students ?? []).map((stu) => ({
       ...(stu as Student),
-      packages: pkgs.filter((p) => p.student_id === stu.id),
+      packages: packagesForStudent(pkgs, memberMap, stu.id),
     }));
     setStudentRows(rows);
     setLoading(false);
@@ -155,14 +173,28 @@ export default function AdminPackagesPage() {
     return courseTypes.find((c) => c.id === courseTypeId);
   }
 
-  const totalPackages = studentRows.reduce((sum, s) => sum + s.packages.length, 0);
+  // The OTHER children on a shared pool, named — so seeing the same pool under
+  // two students reads as one shared thing rather than as a duplicate.
+  function sharedWith(pkg: StudentPackage, exceptStudentId: string) {
+    return packageStudentIds(pkg, members)
+      .filter((sid) => sid !== exceptStudentId)
+      .map((sid) => {
+        const s = studentRows.find((row) => row.id === sid);
+        return s ? s.first_name : sid;
+      })
+      .join(" and ");
+  }
+
+  // Distinct ids: a shared pool is listed under both its children, and counting
+  // it twice would overstate how many packages exist.
+  const totalPackages = new Set(studentRows.flatMap((s) => s.packages.map((p) => p.id))).size;
   const studentsWithPackages = studentRows.filter((s) => s.packages.length > 0).length;
 
   return (
     <AdminLayout>
       <PageHeader
         title="Learner's actual hours"
-        description="Track hour balances across all students. Shared pools live on the family's own hours page; this view is read-only apart from locking a package generation."
+        description="Track hour balances across all students. A shared pool is listed under both children who draw on it; this view is read-only apart from locking a package generation."
         action={
           <Button onClick={() => navigate("/admin/packages/new")} className="flex items-center gap-2">
             <IconPlus /> Add package
@@ -265,6 +297,11 @@ export default function AdminPackagesPage() {
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${courseTypeBadge(ct?.color ?? null)}`}>
                         {pkg.pool_label ?? ct?.name ?? `Type ${pkg.course_type_id}`}
                       </span>
+                      {isSharedPackage(pkg) && (
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full border border-sky-200 bg-sky-50 text-sky-600">
+                          Shared with {sharedWith(pkg, student.id) || "a sibling"}
+                        </span>
+                      )}
                       {pkg.is_locked && (
                         <span className="text-xs font-semibold px-2 py-0.5 rounded-full border border-navy-200 bg-white text-navy-500">
                           🔒 Locked
