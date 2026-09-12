@@ -45,6 +45,7 @@ import AdminSettingsPage from "./pages/admin/AdminSettingsPage";
 import AdminAnalysisPage from "./pages/admin/AdminAnalysisPage";
 import AdminZoomInvoicesPage from "./pages/admin/AdminZoomInvoicesPage";
 import AdminEnrollStudentPage from "./pages/admin/AdminEnrollStudentPage";
+import AdminStudentFormPage from "./pages/admin/AdminStudentFormPage";
 import AdminEnrollmentsPage from "./pages/admin/AdminEnrollmentsPage";
 import AdminParentsPage from "./pages/admin/AdminParentsPage";
 import AdminParentFormPage from "./pages/admin/AdminParentFormPage";
@@ -85,6 +86,7 @@ import ParentChildHomeworkPage from "./pages/parent/ParentChildHomeworkPage";
 import ParentChildReportsPage from "./pages/parent/ParentChildReportsPage";
 import { ParentChildCoachPage, ParentChildCounsellorPage } from "./pages/parent/ParentChildCoachPage";
 import ParentProfilePage from "./pages/parent/ParentProfilePage";
+import { INVOICE_PAYMENT_FLOW_ENABLED } from "./utils/enrollmentFlow";
 
 export default function App() {
   return (
@@ -397,10 +399,29 @@ export default function App() {
             }
           />
           <Route
+            path="/admin/students/new"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminStudentFormPage />
+              </ProtectedRoute>
+            }
+          />
+          {/*
+            The invoice → payment link → proof → approval flow, which also
+            creates the student it invoices. Switched off for now
+            (INVOICE_PAYMENT_FLOW_ENABLED, utils/enrollmentFlow.ts): students
+            are added directly on /admin/students/new and hours on
+            /admin/packages/new, so while the flag is false this route sends an
+            admin to the form that does the half they actually wanted. The page
+            itself is untouched and comes straight back when the flag does.
+          */}
+          <Route
             path="/admin/students/enroll"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
-                <AdminEnrollStudentPage />
+                {INVOICE_PAYMENT_FLOW_ENABLED
+                  ? <AdminEnrollStudentPage />
+                  : <Navigate to="/admin/packages/new" replace />}
               </ProtectedRoute>
             }
           />

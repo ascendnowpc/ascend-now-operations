@@ -424,7 +424,7 @@ export default function AdminEnrollmentsPage() {
         title="Enrollments"
         description="Invoice & payment-link requests for new students and renewals. Review uploaded payment screenshots here."
         action={
-          <Button className="flex items-center gap-2" onClick={() => navigate("/admin/students/enroll")}>
+          <Button className="flex items-center gap-2" onClick={() => navigate("/admin/packages/new")}>
             <IconPlus /> Add / Renew Student
           </Button>
         }

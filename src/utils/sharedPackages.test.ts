@@ -1,12 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
-  SHARED_PACKAGE_STUDENT_COUNT,
   shareableCourseTypes,
   isShareableCourseType,
-  toggleSharedStudent,
-  canSelectSharedStudent,
-  sharedSelectionIssue,
-  sharedStudentsForParent,
   packageCreatedNotice,
   joinNames,
   packageCreateErrorMessage,
@@ -16,6 +11,7 @@ import {
   sharedWithLabel,
   pickCoSharer,
   SHARED_PACKAGE_CO_SHARER_COUNT,
+  sameSharedMembers,
 } from "./sharedPackages";
 import type { CourseType } from "../types/database";
 
@@ -71,77 +67,6 @@ describe("isShareableCourseType", () => {
 
   it("rejects an empty pick, so an untouched form can't submit a shared package", () => {
     expect(isShareableCourseType(CATALOGUE, "")).toBe(false);
-  });
-});
-
-describe("toggleSharedStudent", () => {
-  it("adds a child who isn't picked yet", () => {
-    expect(toggleSharedStudent([], "S1")).toEqual(["S1"]);
-  });
-
-  it("removes a child who is already picked", () => {
-    expect(toggleSharedStudent(["S1", "S2"], "S1")).toEqual(["S2"]);
-  });
-
-  it("ignores a third child rather than silently dropping the first", () => {
-    expect(toggleSharedStudent(["S1", "S2"], "S3")).toEqual(["S1", "S2"]);
-  });
-
-  it("still lets a picked child be unpicked once the pair is full", () => {
-    expect(toggleSharedStudent(["S1", "S2"], "S2")).toEqual(["S1"]);
-  });
-
-  it("never returns more than the shared package's student count", () => {
-    const full = ["S1", "S2", "S3"].reduce(toggleSharedStudent, [] as string[]);
-    expect(full).toHaveLength(SHARED_PACKAGE_STUDENT_COUNT);
-  });
-});
-
-describe("canSelectSharedStudent", () => {
-  it("allows a child while there is room in the pair", () => {
-    expect(canSelectSharedStudent(["S1"], "S2")).toBe(true);
-  });
-
-  it("locks out an unpicked child once the pair is full", () => {
-    expect(canSelectSharedStudent(["S1", "S2"], "S3")).toBe(false);
-  });
-
-  it("keeps a picked child clickable so the choice can be undone", () => {
-    expect(canSelectSharedStudent(["S1", "S2"], "S1")).toBe(true);
-  });
-});
-
-describe("sharedSelectionIssue", () => {
-  const children = [{ id: "S1" }, { id: "S2" }, { id: "S3" }];
-
-  it("passes once exactly two children are picked", () => {
-    expect(sharedSelectionIssue(children, ["S1", "S3"])).toBeNull();
-  });
-
-  it("blocks a single-child household, which can't share anything", () => {
-    expect(sharedSelectionIssue([{ id: "S1" }], ["S1"])).toMatch(/this family has 1/);
-  });
-
-  it("blocks a family with no children at all", () => {
-    expect(sharedSelectionIssue([], [])).toMatch(/this family has 0/);
-  });
-
-  it("blocks a half-made choice", () => {
-    expect(sharedSelectionIssue(children, ["S1"])).toBe("Select 2 children.");
-  });
-
-  it("blocks a selection left over from another family", () => {
-    expect(sharedSelectionIssue(children, ["S1", "OTHER-9"])).toBe("Select 2 children.");
-  });
-});
-
-describe("sharedStudentsForParent", () => {
-  it("drops children who don't belong to the newly picked family", () => {
-    expect(sharedStudentsForParent(["S1", "OTHER-9"], [{ id: "S1" }, { id: "S2" }])).toEqual(["S1"]);
-  });
-
-  it("clears the whole selection when the family changes completely", () => {
-    expect(sharedStudentsForParent(["S1", "S2"], [{ id: "T1" }])).toEqual([]);
   });
 });
 
@@ -304,5 +229,33 @@ describe("pickCoSharer", () => {
   it("never holds more co-sharers than a shared package has room for", () => {
     const after = ["S2", "S3", "S4"].reduce(pickCoSharer, [] as string[]);
     expect(after).toHaveLength(SHARED_PACKAGE_CO_SHARER_COUNT);
+  });
+});
+
+describe("sameSharedMembers", () => {
+  it("matches the same pair whatever order each side is in", () => {
+    expect(sameSharedMembers(["S2", "S1"], ["S1", "S2"])).toBe(true);
+  });
+
+  it("rejects a different pair", () => {
+    expect(sameSharedMembers(["S1", "S2"], ["S1", "S3"])).toBe(false);
+  });
+
+  it("rejects a pool that is shared with nobody", () => {
+    expect(sameSharedMembers([], ["S1", "S2"])).toBe(false);
+  });
+
+  it("rejects a pool shared with more children than you named", () => {
+    expect(sameSharedMembers(["S1", "S2", "S3"], ["S1", "S2"])).toBe(false);
+  });
+
+  it("treats two empty sets as the same", () => {
+    expect(sameSharedMembers([], [])).toBe(true);
+  });
+
+  it("does not reorder its arguments", () => {
+    const have = ["S2", "S1"];
+    sameSharedMembers(have, ["S1", "S2"]);
+    expect(have).toEqual(["S2", "S1"]);
   });
 });
