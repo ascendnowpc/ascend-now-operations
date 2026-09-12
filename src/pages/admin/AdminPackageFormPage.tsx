@@ -215,7 +215,7 @@ export default function AdminPackageFormPage() {
         : [selectedStudent.first_name],
     });
     navigate(
-      isShared ? `/admin/parents/${householdParentId}/packages` : "/admin/packages",
+      isShared ? `/admin/parents/${householdParentId}` : "/admin/packages",
       { state: { notice } },
     );
   }

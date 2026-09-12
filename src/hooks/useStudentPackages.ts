@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabaseClient";
 import type { PackageTopup, SessionLog, SessionLogPoolResolution, StudentPackage, Subject, Teacher } from "../types/database";
 import { computeHoursUsed, computeHoursUsedBySubject, computeHoursUsedByTeacher } from "../utils/packageHours";
 import { sameSharedMembers } from "../utils/sharedPackages";
+import { membersByPackage, type PackageMembers } from "../utils/householdPackages";
 
 export const PRESET_HOURS = [16, 24, 32, 50, 100];
 
@@ -663,27 +664,34 @@ export function useStudentPackages() {
 
 
 /**
- * Every family (parent-owned) package in one read.
+ * Every package and every membership row in two reads.
  *
- * For list screens that need a balance per family — the admin Parents list —
- * where a query per row would be one round trip per family. RLS still applies:
- * an admin sees all of them, a parent only their own.
+ * For list screens that show balances for many people at once — the admin
+ * Parents list, Learner's actual hours — where a query per row would be one
+ * round trip each. Shared and individual packages come back together, and the
+ * members map says who draws on the shared ones, so a caller never has to
+ * remember that a package might be parent-owned; `utils/householdPackages.ts`
+ * turns the pair into "the packages for this student / this household".
+ *
+ * RLS still applies: an admin sees everything, a parent only their family's.
  */
-export function useFamilyPackages() {
-  const [familyPackages, setFamilyPackages] = useState<StudentPackage[]>([]);
+export function useAllPackages() {
+  const [packages, setPackages] = useState<StudentPackage[]>([]);
+  const [members, setMembers] = useState<PackageMembers>(new Map());
   const [loading, setLoading] = useState(true);
 
   const refetch = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from("student_packages")
-      .select("*")
-      .not("parent_id", "is", null);
-    setFamilyPackages((data ?? []) as StudentPackage[]);
+    const [{ data: pkgRows }, { data: memberRows }] = await Promise.all([
+      supabase.from("student_packages").select("*"),
+      supabase.from("student_package_members").select("student_package_id, student_id"),
+    ]);
+    setPackages((pkgRows ?? []) as StudentPackage[]);
+    setMembers(membersByPackage((memberRows ?? []) as { student_package_id: number; student_id: string }[]));
     setLoading(false);
   }, []);
 
   useEffect(() => { refetch(); }, [refetch]);
 
-  return { familyPackages, loading, refetch };
+  return { packages, members, loading, refetch };
 }

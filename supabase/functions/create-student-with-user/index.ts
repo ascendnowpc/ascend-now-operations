@@ -20,7 +20,11 @@
 
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { SMTPClient } from "https://deno.land/x/denomailer@1.3.0/mod.ts";
+// denomailer is imported lazily, inside sendWelcomeEmail. A static import is
+// fetched and compiled while the isolate boots, on every cold start, before a
+// single line of this function runs — and it is only ever needed by the email,
+// which is sent AFTER the response goes out. Loading it on demand takes the
+// whole SMTP library off the path the admin is waiting on.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -76,6 +80,10 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
+    // Reading the body is local work, so start it before the two auth round
+    // trips rather than after them.
+    const bodyPromise = req.json();
+
     const { data: { user }, error: userError } = await callerClient.auth.getUser();
     if (userError || !user) return json({ error: "Unauthorized" }, 401);
 
@@ -93,7 +101,7 @@ serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    const body = await req.json();
+    const body = await bodyPromise;
     const {
       first_name,
       last_name,
@@ -122,21 +130,31 @@ serve(async (req) => {
     // The guardian's name/phone are copied off the linked parent account, the
     // same rule the admin forms apply (applyParentToGuardianContact) — the
     // account is the source of truth for who the guardian is.
+    //
+    // Run alongside the username check rather than before it: neither needs the
+    // other's answer, and they were costing two serial round trips before the
+    // slowest call (creating the auth account) had even started.
+    const [parentResult, username] = await Promise.all([
+      parent_id
+        ? serviceClient
+            .from("parents")
+            .select("id, first_name, last_name, phone_number")
+            .eq("id", parent_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      uniqueUsername(serviceClient, usernameFromEmail(studentEmail)),
+    ]);
+
     let parentFullName: string | null = null;
     let parentPhone: string | null = null;
     if (parent_id) {
-      const { data: parent, error: parentErr } = await serviceClient
-        .from("parents")
-        .select("id, first_name, last_name, phone_number")
-        .eq("id", parent_id)
-        .maybeSingle();
-      if (parentErr) return json({ error: `Parent lookup failed: ${parentErr.message}` }, 400);
+      if (parentResult.error) return json({ error: `Parent lookup failed: ${parentResult.error.message}` }, 400);
+      const parent = parentResult.data;
       if (!parent) return json({ error: `No parent found with id ${parent_id}` }, 404);
       parentFullName = `${parent.first_name} ${parent.last_name}`.trim();
       parentPhone = (parent.phone_number as string | null) ?? null;
     }
 
-    const username = await uniqueUsername(serviceClient, usernameFromEmail(studentEmail));
     const password = passwordFromFirstName(firstName);
     const fullName = `${firstName} ${lastName}`;
 
@@ -180,7 +198,10 @@ serve(async (req) => {
 
     // 3. The Performance Coach assignment, when one was picked. Non-fatal: the
     //    student exists either way and an admin can assign a coach afterwards,
-    //    which is better than rolling back a good account over it.
+    //    which is better than rolling back a good account over it. Awaited
+    //    rather than backgrounded despite that — it is one fast insert, and the
+    //    admin lands on the students list the moment this returns, where a
+    //    not-yet-written assignment would read as "Unassigned".
     if (pc_teacher_id) {
       const { error: pcErr } = await serviceClient.from("pc_student_assignments").insert({
         student_id: student.id,
@@ -220,6 +241,7 @@ async function sendWelcomeEmail(opts: {
     throw new Error("SMTP_HOST, SMTP_USER, and SMTP_PASS secrets are required");
   }
 
+  const { SMTPClient } = await import("https://deno.land/x/denomailer@1.3.0/mod.ts");
   const client = new SMTPClient({
     connection: {
       hostname: smtpHost,
