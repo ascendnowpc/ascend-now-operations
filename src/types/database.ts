@@ -170,12 +170,14 @@ export interface StudentPackage {
   id: number;
   // A package is owned by EXACTLY ONE of a student or a parent — the
   // `student_packages_one_owner` CHECK enforces it (2026-09-11).
-  //   * student_id set  → an ordinary package, only that student draws on it.
-  //   * parent_id set   → a FAMILY package: every child of that parent draws
-  //     on the same pool, so 50 hours bought once can be split between
-  //     siblings however they actually get used.
-  // Use `packageOwnerLabel`/`isFamilyPackage` (utils/familyPackages) rather
-  // than testing the columns ad hoc.
+  //   * student_id set  → an INDIVIDUAL package, only that student draws on it.
+  //   * parent_id set   → a SHARED package, bought once by that household. Who
+  //     may actually draw on it is the two children named in
+  //     `student_package_members`, NOT every child of the parent (2026-09-12) —
+  //     so 50 hours bought once split between two named siblings however they
+  //     actually get used.
+  // Use `isFamilyPackage` (utils/familyPackages) rather than testing the
+  // columns ad hoc.
   student_id: string | null;
   parent_id: string | null;
   program_type_id: number | null;
@@ -192,6 +194,19 @@ export interface StudentPackage {
   locked_hours_used: number | null;
   created_at: string;
   updated_at: string;
+}
+
+// The children who share one parent-owned package. Exactly two per package,
+// named by an admin when the package is created — being a child of the owning
+// parent is not by itself enough to spend the pool (2026-09-12). Mirrored by
+// `student_package_ids()` in SQL, which is what the session-log router and RLS
+// both go through; the app reads membership through those rather than through
+// these rows directly, so this is here to document the table's shape.
+export interface StudentPackageMember {
+  student_package_id: number;
+  student_id: string;
+  added_by_user_id: string | null;
+  created_at: string;
 }
 
 // Sticky (teacher, subject) -> pool cache set by a PC resolving an
@@ -342,6 +357,11 @@ export interface CourseType {
   color: string;
   sort_order: number;
   is_active: boolean;
+  // Whether hours of this course type may be bought once and shared between
+  // two siblings (Academic and Beyond Academic are; College Counselling and
+  // the bundles are bought per student). The database enforces it on every
+  // shared package — see validate_shared_package_course_type() (2026-09-12).
+  is_shareable: boolean;
   created_at: string;
 }
 

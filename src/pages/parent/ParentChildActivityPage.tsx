@@ -62,7 +62,7 @@ function ActivityView({ student }: { student: Student }) {
     let cancelled = false;
     async function load() {
       setPackagesLoading(true);
-      const rows = await fetchPackagesForStudent(student.id, student.parent_id);
+      const rows = await fetchPackagesForStudent(student.id);
       if (cancelled) return;
       setPackages(rows);
       setPackagesLoading(false);

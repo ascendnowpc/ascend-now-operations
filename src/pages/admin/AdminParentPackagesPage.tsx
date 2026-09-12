@@ -22,10 +22,11 @@ type PackageWithTopups = StudentPackage & { package_topups: PackageTopup[] };
 /**
  * A family's hours: the packages a parent bought, and which child spent them.
  *
- * These are the pools every sibling draws on — 50 Academic hours bought once
- * are 50 hours the family shares, not 25 each. Each card shows the balance and
- * a colour-coded split of who used what, so "40 of 50 used" is answerable
- * without opening two students' session logs.
+ * Each pool is shared by the two children named on it — 50 Academic hours
+ * bought once are 50 hours those two share, not 25 each. The card shows the
+ * balance and a colour-coded split of who used what, so "40 of 50 used" is
+ * answerable without opening two students' session logs, and a named child who
+ * has spent nothing still shows, at zero: the usage RPC returns every member.
  */
 export default function AdminParentPackagesPage() {
   const { id } = useParams<{ id: string }>();
@@ -67,7 +68,7 @@ export default function AdminParentPackagesPage() {
           <div className="flex gap-2">
             <Button
               className="flex items-center gap-2"
-              onClick={() => navigate(`/admin/parents/${id}/packages/new`)}
+              onClick={() => navigate(`/admin/packages/new?parent=${id}`)}
             >
               <IconPlus /> Add package
             </Button>
@@ -95,9 +96,7 @@ export default function AdminParentPackagesPage() {
           <Card className="p-5">
             <h3 className="text-sm font-semibold text-navy-700 mb-3">Children</h3>
             {children.length === 0 ? (
-              <p className="text-sm text-navy-400">
-                No children linked yet — these hours will be shared by whoever is linked to this parent.
-              </p>
+              <p className="text-sm text-navy-400">No children linked yet.</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {children.map((c) => (

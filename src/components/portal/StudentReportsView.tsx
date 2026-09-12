@@ -27,7 +27,7 @@ export function StudentReportsView({ student }: { student: Student }) {
     let cancelled = false;
     async function load() {
       setLoading(true);
-      const [invs, pkgs] = await Promise.all([fetchInvoicesForStudent(student.id), fetchPackagesForStudent(student.id, student.parent_id)]);
+      const [invs, pkgs] = await Promise.all([fetchInvoicesForStudent(student.id), fetchPackagesForStudent(student.id)]);
       if (cancelled) return;
       // RLS already hides unpublished reports from the student; this is a
       // second guard so a draft can never surface here.

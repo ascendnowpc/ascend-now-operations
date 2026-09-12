@@ -17,6 +17,11 @@
 //    sessions don't re-notify. A topup resets those flags so they can fire
 //    again against the new, larger total (see on_package_topup_inserted()).
 //
+// Either way the alert goes to the coach of the child who sat the session:
+// that is the package's own student for an individual package, and — since a
+// SHARED package is owned by a parent and names no student at all — the
+// session log's own student for a shared pool.
+//
 // Required edge function secrets:
 //   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM
 //
@@ -60,7 +65,7 @@ serve(async (req) => {
 
     const { data: log, error: logError } = await serviceClient
       .from("session_logs")
-      .select("student_package_id")
+      .select("student_package_id, student_id")
       .eq("id", session_log_id)
       .single();
 
@@ -112,12 +117,20 @@ serve(async (req) => {
       if (toFire.length === 0) return json({ skipped: true, reason: "No newly crossed threshold" });
     }
 
+    // Whose coach to tell. A student-owned package names its student; a
+    // SHARED package names a parent and no student at all (2026-09-11), so the
+    // alert follows the child who actually sat the session that crossed the
+    // threshold — their coach is the one who can act on it. Without this a
+    // shared pool could run to 100% and nobody would ever be emailed.
+    const alertStudentId = pkg.student_id ?? log.student_id;
+    if (!alertStudentId) return json({ skipped: true, reason: "Session has no student to alert about" });
+
     // Active PC assignment for this student — the same source used for
     // coordinator resolution elsewhere (usePcAssignments.getPcForStudent).
     const { data: assignment } = await serviceClient
       .from("pc_student_assignments")
       .select("pc_teacher_id")
-      .eq("student_id", pkg.student_id)
+      .eq("student_id", alertStudentId)
       .is("unassigned_at", null)
       .maybeSingle();
 
@@ -133,7 +146,7 @@ serve(async (req) => {
     const { data: student } = await serviceClient
       .from("students")
       .select("id, first_name, last_name")
-      .eq("id", pkg.student_id)
+      .eq("id", alertStudentId)
       .single();
 
     const { data: courseType } = await serviceClient
@@ -144,7 +157,7 @@ serve(async (req) => {
 
     const studentDisplay = student
       ? `${student.id} - ${student.first_name}${student.last_name ? " " + student.last_name : ""}`
-      : pkg.student_id;
+      : alertStudentId;
     const courseTypeName = courseType?.name ?? "Package";
     const pcName = `${pc.first_name}${pc.last_name ? " " + pc.last_name : ""}`;
     const hoursRemaining = hoursRemainingRaw;

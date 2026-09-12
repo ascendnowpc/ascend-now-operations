@@ -302,7 +302,7 @@ export function StudentDetailView({ role, backPath, backLabel }: {
       // `s` is the student row this same load just fetched — passing its
       // parent_id brings in the FAMILY pools they share with any siblings
       // (2026-09-11), not just the packages bought for them alone.
-      fetchPackagesForStudent(studentId, s?.parent_id ?? null),
+      fetchPackagesForStudent(studentId),
       fetchSessionsForBalance(studentId),
       fetchInvoicesForStudent(studentId),
       fetchPendingPoolSessions(studentId),

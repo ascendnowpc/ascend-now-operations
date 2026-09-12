@@ -1,37 +1,39 @@
-import type { StudentPackage, Student } from "../types/database";
+import type { StudentPackage } from "../types/database";
 import { idSeqNumber } from "./entityId";
 
-// Family packages: a pool bought once by a parent and drawn down by every
-// sibling. The rules that decide who owns a pool, who may spend from it, and
-// how a shared pool's usage splits between children live here rather than in
-// the components, so the admin view, the parent view and each student's own
-// view can never disagree about the same numbers.
+// Shared packages: a pool bought once by a parent and drawn down by the two
+// children named on it. The rules that decide who owns a pool, who may spend
+// from it, and how a shared pool's usage splits between children live here
+// rather than in the components, so the admin view, the parent view and each
+// student's own view can never disagree about the same numbers.
 //
-// See supabase/migrations/20260911000000_family_packages.sql — the database
+// See supabase/migrations/20260911000000_family_packages.sql (ownership) and
+// 20260912000000_shared_package_members.sql (membership) — the database
 // enforces the same ownership rule with a CHECK constraint, and routes session
-// logs to family pools with the matching `student_package_ids()` helper.
+// logs to shared pools with the matching `student_package_ids()` helper.
 
-/** A pool owned by a parent, shared by every child linked to them. */
+/** A pool owned by a parent rather than by one student. */
 export function isFamilyPackage(pkg: Pick<StudentPackage, "parent_id">): boolean {
   return pkg.parent_id != null;
 }
 
 /**
- * The pools a student may draw on: their own, plus their family's.
+ * The pools a student may draw on: their own, plus the shared ones they are
+ * named on.
  *
  * Mirrors the `student_package_ids()` SQL helper the session-log trigger uses,
  * so what the UI shows a student they can spend and what the database actually
- * lets them spend are the same set.
+ * lets them spend are the same set. Membership is per package, not per
+ * household: since 2026-09-12 a sibling who was not named on a shared pool
+ * cannot spend it, even though their parent owns it.
  */
 export function packagesAvailableToStudent(
   packages: StudentPackage[],
-  student: Pick<Student, "id" | "parent_id">,
+  studentId: string,
+  sharedPackageIds: Iterable<number>,
 ): StudentPackage[] {
-  return packages.filter(
-    (p) =>
-      p.student_id === student.id ||
-      (p.parent_id != null && student.parent_id != null && p.parent_id === student.parent_id),
-  );
+  const shared = new Set(sharedPackageIds);
+  return packages.filter((p) => p.student_id === studentId || shared.has(p.id));
 }
 
 export interface SiblingUsage {
