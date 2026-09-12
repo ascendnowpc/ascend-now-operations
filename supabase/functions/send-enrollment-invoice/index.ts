@@ -88,7 +88,7 @@ serve(async (req) => {
     // useInvoices.ts) and resolves relation names client-side instead.
     const { data: packages, error: packagesErr } = await serviceClient
       .from("enrollment_request_packages")
-      .select("course_type_id, hours, package_size_label")
+      .select("id, course_type_id, hours, package_size_label, is_shared")
       .eq("enrollment_request_id", enrollment.id)
       .order("sort_order", { ascending: true });
     if (packagesErr || !packages || packages.length === 0) {
@@ -100,10 +100,40 @@ serve(async (req) => {
       .select("id, name")
       .in("id", Array.from(new Set(packages.map((p) => p.course_type_id))));
     const courseTypeNameById = new Map((courseTypeRows ?? []).map((c) => [c.id as number, c.name as string]));
+
+    // Who else will be able to spend a shared package's hours (2026-09-12).
+    // A family paying an invoice for hours a second child will also draw on
+    // should see that on the invoice rather than find out afterwards. Only
+    // the OTHER children are stored — the student this invoice is for is a
+    // member by definition and is already named all over the email.
+    const sharedLineIds = packages.filter((p) => p.is_shared).map((p) => p.id as string);
+    const coSharerNamesByLine = new Map<string, string[]>();
+    if (sharedLineIds.length > 0) {
+      const { data: coSharerRows } = await serviceClient
+        .from("enrollment_request_package_members")
+        .select("enrollment_request_package_id, student_id")
+        .in("enrollment_request_package_id", sharedLineIds);
+      const ids = Array.from(new Set((coSharerRows ?? []).map((r) => r.student_id as string)));
+      const { data: coSharerStudents } = ids.length > 0
+        ? await serviceClient.from("students").select("id, first_name, last_name").in("id", ids)
+        : { data: [] };
+      const nameById = new Map((coSharerStudents ?? []).map((c) =>
+        [c.id as string, `${c.first_name}${c.last_name ? " " + c.last_name : ""}`.trim()]));
+      for (const r of coSharerRows ?? []) {
+        const lineId = r.enrollment_request_package_id as string;
+        const list = coSharerNamesByLine.get(lineId) ?? [];
+        list.push(nameById.get(r.student_id as string) ?? (r.student_id as string));
+        coSharerNamesByLine.set(lineId, list);
+      }
+    }
+
     const packageLines = packages.map((p) => ({
       courseTypeName: courseTypeNameById.get(p.course_type_id) ?? "Package",
       packageSizeLabel: p.package_size_label as string,
       hours: Number(p.hours),
+      sharedWith: p.is_shared
+        ? `Shared with ${(coSharerNamesByLine.get(p.id as string) ?? []).join(" and ") || "a sibling"}`
+        : null,
     }));
     const totalHours = packageLines.reduce((sum, p) => sum + p.hours, 0);
 
@@ -128,7 +158,7 @@ serve(async (req) => {
     const packageRowsHtml = packageLines
       .map((p, i) => `<tr${i % 2 === 0 ? ' style="background:#f8fafc;"' : ""}>
 <td style="padding:10px 14px;color:#64748b;font-weight:600;border:1px solid #e2e8f0;">${packageLines.length > 1 ? `Package ${i + 1}` : "Package"}</td>
-<td style="padding:10px 14px;border:1px solid #e2e8f0;">${p.courseTypeName} — ${p.packageSizeLabel} (${p.hours} hrs)</td>
+<td style="padding:10px 14px;border:1px solid #e2e8f0;">${p.courseTypeName} — ${p.packageSizeLabel} (${p.hours} hrs)${p.sharedWith ? `<br><span style="font-size:12px;color:#0284c7;">${p.sharedWith}</span>` : ""}</td>
 </tr>`)
       .join("");
     const totalRowHtml = packageLines.length > 1

@@ -34,6 +34,12 @@
 //     up every pool in the bundle at its own fixed hours; once the bundle
 //     is already owned, the enroll form forces picking exactly one pool
 //     (bundle_pool_label) and only that pool receives the line's hours.
+//   - SHARED lines (line.is_shared, 2026-09-12): the pool is owned by the
+//     student's PARENT instead of the student, and drawn on by exactly two
+//     named children — this student plus whoever the line's
+//     enrollment_request_package_members rows name. Only the others are
+//     stored, because on a new-student enrollment this student has no id
+//     until the block below creates them. Bundles are never shareable.
 //
 // On reject: sets status to 'rejected' (stays visibly rejected, does not
 // silently revert to pending_payment) and emails the reason + payment link
@@ -359,6 +365,80 @@ ${paymentUrl ? `<div style="text-align:center;margin:24px 0 8px;"><a href="${pay
 
     if (!studentId) return json({ error: "No student associated with this renewal — inconsistent state." }, 400);
 
+    // ── Shared package lines ──────────────────────────────────────────────
+    // A line marked is_shared becomes a PARENT-owned pool drawn on by named
+    // children instead of a student-owned one. The line stores only the OTHER
+    // children; the student this request is for is always a member, and on a
+    // new-student enrollment that is the student created just above — which is
+    // exactly why they are added here rather than at request time.
+    //
+    // Everything below runs before the first package write, so a request that
+    // could not produce a valid shared pool fails with zero side effects
+    // rather than half-creating packages the family has already paid for.
+    //
+    // 2 is the business rule "2 students per programme". It also lives in
+    // validate_student_package_member() (SQL) and SHARED_PACKAGE_STUDENT_COUNT
+    // (src/utils/sharedPackages.ts) — change all three together.
+    const SHARED_PACKAGE_STUDENT_COUNT = 2;
+    const sharedLines = packages.filter((p) => p.is_shared);
+    const memberIdsByLine = new Map<string, string[]>();
+    const coSharerNameById = new Map<string, string>();
+    let householdParentId: string | null = null;
+
+    if (sharedLines.length > 0) {
+      const { data: studentRow, error: studentLookupErr } = await serviceClient
+        .from("students")
+        .select("parent_id")
+        .eq("id", studentId)
+        .single();
+      if (studentLookupErr || !studentRow) {
+        return json({ error: `Failed to look up the student's household: ${studentLookupErr?.message ?? "not found"}` }, 400);
+      }
+      householdParentId = (studentRow.parent_id as string | null) ?? null;
+      if (!householdParentId) {
+        return json({ error: "This request has a shared package, but the student has no parent account to own it. Link the family first, or sell the package individually." }, 400);
+      }
+
+      const { data: coSharerRows, error: coSharerErr } = await serviceClient
+        .from("enrollment_request_package_members")
+        .select("enrollment_request_package_id, student_id")
+        .in("enrollment_request_package_id", sharedLines.map((p) => p.id));
+      if (coSharerErr) return json({ error: `Failed to load shared-package members: ${coSharerErr.message}` }, 400);
+
+      // Every co-sharer must still be a child of this household — a sibling
+      // can have been moved or deleted between invoicing and payment.
+      const coSharerIds = Array.from(new Set((coSharerRows ?? []).map((r) => r.student_id as string)));
+      if (coSharerIds.length > 0) {
+        const { data: coSharerStudents, error: coSharerStudentsErr } = await serviceClient
+          .from("students")
+          .select("id, first_name, parent_id")
+          .in("id", coSharerIds);
+        if (coSharerStudentsErr) return json({ error: `Failed to check shared-package members: ${coSharerStudentsErr.message}` }, 400);
+        const found = new Map((coSharerStudents ?? []).map((c) => [c.id as string, c]));
+        for (const id of coSharerIds) {
+          const child = found.get(id);
+          if (!child) return json({ error: `Student ${id} was named on a shared package but no longer exists.` }, 400);
+          if (child.parent_id !== householdParentId) {
+            return json({ error: `${child.first_name} (${id}) is no longer in this family and cannot share a package with this student.` }, 400);
+          }
+          coSharerNameById.set(id, child.first_name as string);
+        }
+      }
+
+      for (const line of sharedLines) {
+        const members = Array.from(new Set([
+          studentId,
+          ...(coSharerRows ?? [])
+            .filter((r) => r.enrollment_request_package_id === line.id)
+            .map((r) => r.student_id as string),
+        ]));
+        if (members.length !== SHARED_PACKAGE_STUDENT_COUNT) {
+          return json({ error: `The shared package "${line.package_size_label}" names ${members.length} student(s); a shared package is shared by exactly ${SHARED_PACKAGE_STUDENT_COUNT}.` }, 400);
+        }
+        memberIdsByLine.set(line.id as string, members);
+      }
+    }
+
     // Applies one bundle pool definition: tops up its existing *unlocked*
     // pool of the same (course_type, pool_label) — same match the
     // standalone branch below uses — or starts a fresh one if that pool was
@@ -450,8 +530,11 @@ ${paymentUrl ? `<div style="text-align:center;margin:24px 0 8px;"><a href="${pay
       package_size_label: string;
       is_bundle_pool_selection: boolean;
       bundle_pool_label: string | null;
+      is_shared: boolean;
     }): Promise<{ error: string } | { targetPackageId: number; isNewGeneration: boolean }> {
       const courseTypeName = courseTypeNameById.get(pkg.course_type_id) ?? "Package";
+      // Resolved above, before any write; both are set together or not at all.
+      const memberIds = pkg.is_shared ? memberIdsByLine.get(pkg.id) ?? [] : [];
 
       // bundle_pool_settings is keyed by the bundle's course_type name
       // (bundle_name), resolved the same way courseTypeName above already
@@ -471,6 +554,13 @@ ${paymentUrl ? `<div style="text-align:center;margin:24px 0 8px;"><a href="${pay
         : undefined;
 
       if (bundleDefs) {
+        // A bundle contains a College Counselling pool, which is bought per
+        // student, so no bundle course type is is_shareable and this is
+        // unreachable through the form. Stated rather than assumed, because
+        // applyBundlePool below is student-owned throughout.
+        if (pkg.is_shared) {
+          return { error: `"${courseTypeName}" is a bundle and cannot be sold as a shared package.` };
+        }
         const { data: poolCourseTypes, error: poolCtErr } = await serviceClient
           .from("course_types")
           .select("id, name")
@@ -513,11 +603,21 @@ ${paymentUrl ? `<div style="text-align:center;margin:24px 0 8px;"><a href="${pay
         return { targetPackageId: lastPackageId!, isNewGeneration: anyNew && !anyExisting };
       }
 
-      // Current (unlocked) package for this course type, if any.
+      // Which owner's pools this line looks at, creates under, and renews.
+      // The only difference between a shared and an individual line is this
+      // one column — hours, labels, bundles and the renewal-vs-new-generation
+      // rule below are identical.
+      const ownerColumn = pkg.is_shared ? "parent_id" : "student_id";
+      const ownerId = pkg.is_shared ? householdParentId! : studentId!;
+      const ownerColumns = pkg.is_shared
+        ? { parent_id: householdParentId }
+        : { student_id: studentId };
+
+      // Current (unlocked) package of this owner's for this course type, if any.
       const { data: currentPkg } = await serviceClient
         .from("student_packages")
         .select("*")
-        .eq("student_id", studentId!)
+        .eq(ownerColumn, ownerId)
         .eq("course_type_id", pkg.course_type_id)
         .eq("is_locked", false)
         .maybeSingle();
@@ -527,6 +627,25 @@ ${paymentUrl ? `<div style="text-align:center;margin:24px 0 8px;"><a href="${pay
       if (currentPkg) {
         targetPackageId = currentPkg.id;
         isNewGeneration = false;
+
+        // Topping up an existing shared pool only makes sense if it is shared
+        // with the same children this line names. Adding hours to a pool two
+        // OTHER siblings draw on would be invisible and irreversible, so it is
+        // refused rather than guessed at.
+        if (pkg.is_shared) {
+          const { data: existingMembers, error: existingMembersErr } = await serviceClient
+            .from("student_package_members")
+            .select("student_id")
+            .eq("student_package_id", targetPackageId);
+          if (existingMembersErr) {
+            return { error: `Failed to read who shares the existing pool: ${existingMembersErr.message}` };
+          }
+          const have = (existingMembers ?? []).map((m) => m.student_id as string).sort();
+          const want = [...memberIds].sort();
+          if (have.length !== want.length || have.some((id, i) => id !== want[i])) {
+            return { error: `The family's existing ${courseTypeName} pool is shared by ${have.join(", ") || "nobody"}, but this line names ${want.join(", ")}. Lock the existing pool first, or sell this one to the same pair.` };
+          }
+        }
       } else {
         // No live package for this course type — this renewal starts a fresh
         // generation (the prior one was locked). It must inherit whatever
@@ -538,7 +657,7 @@ ${paymentUrl ? `<div style="text-align:center;margin:24px 0 8px;"><a href="${pay
         const { data: priorPkg } = await serviceClient
           .from("student_packages")
           .select("package_type_id, pool_label")
-          .eq("student_id", studentId!)
+          .eq(ownerColumn, ownerId)
           .eq("course_type_id", pkg.course_type_id)
           .order("id", { ascending: false })
           .limit(1)
@@ -546,7 +665,7 @@ ${paymentUrl ? `<div style="text-align:center;margin:24px 0 8px;"><a href="${pay
         const { data: newPkg, error: pkgErr } = await serviceClient
           .from("student_packages")
           .insert({
-            student_id: studentId,
+            ...ownerColumns,
             course_type_id: pkg.course_type_id,
             program_type_id: pkg.program_type_id,
             package_type_id: priorPkg?.package_type_id ?? null,
@@ -557,6 +676,25 @@ ${paymentUrl ? `<div style="text-align:center;margin:24px 0 8px;"><a href="${pay
         if (pkgErr || !newPkg) return { error: `Package creation failed: ${pkgErr?.message}` };
         targetPackageId = newPkg.id;
         isNewGeneration = true;
+
+        // Name the children on a brand-new shared pool before any hours land
+        // on it: a parent-owned pool with no members is one nobody can spend,
+        // and the session-log router would send their lessons to a zero-hour
+        // fallback instead. Deleted again if this fails, so a half-made pool
+        // never survives the confirm.
+        if (pkg.is_shared) {
+          const { error: memberErr } = await serviceClient
+            .from("student_package_members")
+            .insert(memberIds.map((id) => ({
+              student_package_id: targetPackageId,
+              student_id: id,
+              added_by_user_id: user.id,
+            })));
+          if (memberErr) {
+            await serviceClient.from("student_packages").delete().eq("id", targetPackageId);
+            return { error: `Sharing the new ${courseTypeName} pool failed: ${memberErr.message}` };
+          }
+        }
       }
 
       const { error: topupErr } = await serviceClient.from("package_topups").insert({
@@ -579,6 +717,8 @@ ${paymentUrl ? `<div style="text-align:center;margin:24px 0 8px;"><a href="${pay
       packageSizeLabel: string;
       targetPackageId: number;
       isNewGeneration: boolean;
+      /** "Shared with Elif" on a shared line, null on an individual one. */
+      sharedWith: string | null;
     }[] = [];
 
     // Processed sequentially, not in parallel, on purpose: two lines can
@@ -602,6 +742,15 @@ ${paymentUrl ? `<div style="text-align:center;margin:24px 0 8px;"><a href="${pay
         packageSizeLabel: pkg.package_size_label,
         targetPackageId: result.targetPackageId,
         isNewGeneration: result.isNewGeneration,
+        // The confirmation email says who else can spend these hours. A
+        // family reading "Academic — 50 hours" with no other mention would
+        // reasonably think it was bought for one child.
+        sharedWith: pkg.is_shared
+          ? `Shared with ${(memberIdsByLine.get(pkg.id) ?? [])
+              .filter((id) => id !== studentId)
+              .map((id) => coSharerNameById.get(id) ?? id)
+              .join(" and ")}`
+          : null,
       });
     }
 
@@ -680,7 +829,7 @@ ${paymentUrl ? `<div style="text-align:center;margin:24px 0 8px;"><a href="${pay
     const packageRowsHtml = processedPackages
       .map((p, i) => `<tr${i % 2 === 0 ? ' style="background:#f8fafc;"' : ""}>
 <td style="padding:10px 14px;color:#64748b;font-weight:600;border:1px solid #e2e8f0;">${processedPackages.length > 1 ? `Package ${i + 1}` : "Package"}</td>
-<td style="padding:10px 14px;border:1px solid #e2e8f0;">${p.courseTypeName} — ${p.packageSizeLabel} (${p.hours} hrs)</td>
+<td style="padding:10px 14px;border:1px solid #e2e8f0;">${p.courseTypeName} — ${p.packageSizeLabel} (${p.hours} hrs)${p.sharedWith ? `<br><span style="font-size:12px;color:#0284c7;">${p.sharedWith}</span>` : ""}</td>
 </tr>`)
       .join("");
     const totalHours = processedPackages.reduce((sum, p) => sum + p.hours, 0);

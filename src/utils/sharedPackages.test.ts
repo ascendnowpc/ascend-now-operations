@@ -10,6 +10,12 @@ import {
   packageCreatedNotice,
   joinNames,
   packageCreateErrorMessage,
+  coSharerCandidates,
+  canSellShared,
+  sharedLineIssue,
+  sharedWithLabel,
+  pickCoSharer,
+  SHARED_PACKAGE_CO_SHARER_COUNT,
 } from "./sharedPackages";
 import type { CourseType } from "../types/database";
 
@@ -203,5 +209,100 @@ describe("packageCreateErrorMessage", () => {
 
   it("never paraphrases an error it doesn't recognise", () => {
     expect(packageCreateErrorMessage("connection reset")).toBe("connection reset");
+  });
+});
+
+describe("coSharerCandidates", () => {
+  const children = [{ id: "S1" }, { id: "S2" }, { id: "S3" }];
+
+  it("excludes the student being invoiced — they are a member already", () => {
+    expect(coSharerCandidates(children, "S2").map((c) => c.id)).toEqual(["S1", "S3"]);
+  });
+
+  it("excludes nobody on a new-student enrollment, where the child has no id yet", () => {
+    expect(coSharerCandidates(children, null)).toHaveLength(3);
+  });
+});
+
+describe("canSellShared", () => {
+  it("allows a two-child family renewing for one of them", () => {
+    expect(canSellShared("P1", [{ id: "S1" }, { id: "S2" }], "S1")).toBe(true);
+  });
+
+  it("refuses a family with only the student being invoiced", () => {
+    expect(canSellShared("P1", [{ id: "S1" }], "S1")).toBe(false);
+  });
+
+  it("refuses a student with no parent account", () => {
+    expect(canSellShared(null, [{ id: "S1" }, { id: "S2" }], "S1")).toBe(false);
+  });
+
+  it("allows a new student joining a household that already has one child", () => {
+    expect(canSellShared("P1", [{ id: "S1" }], null)).toBe(true);
+  });
+});
+
+describe("sharedLineIssue", () => {
+  const children = [{ id: "S1" }, { id: "S2" }, { id: "S3" }];
+
+  it("passes once the other child is picked", () => {
+    expect(sharedLineIssue("P1", children, "S1", ["S2"])).toBeNull();
+  });
+
+  it("asks for the family first when none is linked", () => {
+    expect(sharedLineIssue(null, children, "S1", ["S2"])).toMatch(/Pick the family/);
+  });
+
+  it("says a one-child family has nobody to share with", () => {
+    expect(sharedLineIssue("P1", [{ id: "S1" }], "S1", [])).toMatch(/no one else to share with/);
+  });
+
+  it("blocks an empty pick", () => {
+    expect(sharedLineIssue("P1", children, "S1", [])).toBe("Select the other child to share with.");
+  });
+
+  it("blocks picking the student being invoiced as their own co-sharer", () => {
+    expect(sharedLineIssue("P1", children, "S1", ["S1"])).toBe("Select the other child to share with.");
+  });
+
+  it("blocks a child from another household", () => {
+    expect(sharedLineIssue("P1", children, "S1", ["OTHER-9"])).toBe("Select the other child to share with.");
+  });
+
+  it("blocks two co-sharers, which would make three members", () => {
+    expect(sharedLineIssue("P1", children, "S1", ["S2", "S3"])).toBe("Select the other child to share with.");
+  });
+});
+
+describe("sharedWithLabel", () => {
+  it("names the co-sharer on a shared package", () => {
+    expect(sharedWithLabel(true, ["Elif"])).toBe("Shared with Elif");
+  });
+
+  it("says nothing at all for an individual package", () => {
+    expect(sharedWithLabel(false, ["Elif"])).toBeNull();
+  });
+
+  it("still marks a shared package whose co-sharer name is unavailable", () => {
+    expect(sharedWithLabel(true, [])).toBe("Shared");
+  });
+});
+
+describe("pickCoSharer", () => {
+  it("picks a child when nothing is chosen", () => {
+    expect(pickCoSharer([], "S2")).toEqual(["S2"]);
+  });
+
+  it("clears the child when they are clicked again", () => {
+    expect(pickCoSharer(["S2"], "S2")).toEqual([]);
+  });
+
+  it("replaces the existing pick rather than ignoring the click", () => {
+    expect(pickCoSharer(["S2"], "S3")).toEqual(["S3"]);
+  });
+
+  it("never holds more co-sharers than a shared package has room for", () => {
+    const after = ["S2", "S3", "S4"].reduce(pickCoSharer, [] as string[]);
+    expect(after).toHaveLength(SHARED_PACKAGE_CO_SHARER_COUNT);
   });
 });

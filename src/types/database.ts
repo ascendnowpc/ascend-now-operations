@@ -673,11 +673,26 @@ export interface EnrollmentRequestPackage {
   // what distinguishes that from "no selection, create every pool".
   is_bundle_pool_selection: boolean;
   bundle_pool_label: string | null;
+  // Confirming this line creates a SHARED (parent-owned) pool rather than a
+  // student-owned one (2026-09-12). Its members are the student this request
+  // is FOR, plus the children named in `enrollment_request_package_members` —
+  // only those others are stored, because on a new-student enrollment the
+  // enrolling student has no id until confirm creates them.
+  is_shared: boolean;
   // Stamped by review-enrollment-payment on confirm — a multi-package
   // request can create/top-up several different student_packages rows in
   // one confirm, so this lives per line item rather than on the request.
   resulting_student_package_id: number | null;
   is_new_package_generation: boolean | null;
+  created_at: string;
+}
+
+// The OTHER children a shared package line is to be shared with — never the
+// student the request is already for, who becomes a member at confirm time
+// (2026-09-12). Mirrors student_package_members, one step earlier in the flow.
+export interface EnrollmentRequestPackageMember {
+  enrollment_request_package_id: string;
+  student_id: string;
   created_at: string;
 }
 

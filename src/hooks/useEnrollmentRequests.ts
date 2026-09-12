@@ -1,10 +1,12 @@
 import { useCallback, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { invokeEdgeFunction, describeFunctionError } from "../lib/edgeFunctions";
-import type { EnrollmentRequest, EnrollmentRequestPackage, EnrollmentRequestPaymentProof, EnrollmentType } from "../types/database";
+import type { EnrollmentRequest, EnrollmentRequestPackage, EnrollmentRequestPackageMember, EnrollmentRequestPaymentProof, EnrollmentType } from "../types/database";
 
 export type EnrollmentRequestPackageWithCourseType = EnrollmentRequestPackage & {
   course_types: { name: string; color: string } | null;
+  /** The OTHER children a shared line is shared with; empty on an individual one. */
+  co_sharer_student_ids: string[];
 };
 
 export type EnrollmentRequestWithDetails = EnrollmentRequest & {
@@ -19,6 +21,14 @@ export type NewPackageInput = {
   package_size_label: string;
   is_bundle_pool_selection?: boolean;
   bundle_pool_label?: string | null;
+  /** Confirming this line creates a SHARED (parent-owned) pool. */
+  is_shared?: boolean;
+  /**
+   * The OTHER children it is shared with — never the student this request is
+   * for, who becomes a member at confirm time because a new student has no id
+   * until then.
+   */
+  co_sharer_student_ids?: string[];
 };
 
 export function useEnrollmentRequests() {
@@ -56,18 +66,42 @@ export function useEnrollmentRequests() {
             .in("enrollment_request_id", ids)
             .order("uploaded_at", { ascending: true }),
         ]);
-    setLoading(false);
 
     // A failure here (RLS/grants regression, transient error) would
     // otherwise silently render every request as if it had zero packages
     // and zero payment proofs — surface it instead of swallowing it.
     if (packagesRes.error || proofsRes.error) {
+      setLoading(false);
       setError(packagesRes.error?.message ?? proofsRes.error?.message ?? "Failed to load package/payment-proof details");
       return [];
     }
 
+    // Who each shared line is to be shared with. Fetched separately for the
+    // same reason the two queries above are: this codebase resolves relations
+    // client-side rather than nesting embeds. A line with no rows here is an
+    // ordinary individual package.
+    const packageIds = (packagesRes.data ?? []).map((p) => p.id as string);
+    const { data: memberRows, error: membersErr } = packageIds.length === 0
+      ? { data: [] as EnrollmentRequestPackageMember[], error: null }
+      : await supabase
+          .from("enrollment_request_package_members")
+          .select("enrollment_request_package_id, student_id")
+          .in("enrollment_request_package_id", packageIds);
+    setLoading(false);
+    if (membersErr) {
+      setError(membersErr.message);
+      return [];
+    }
+    const coSharersByPackage = new Map<string, string[]>();
+    for (const m of (memberRows ?? []) as EnrollmentRequestPackageMember[]) {
+      const list = coSharersByPackage.get(m.enrollment_request_package_id) ?? [];
+      list.push(m.student_id);
+      coSharersByPackage.set(m.enrollment_request_package_id, list);
+    }
+
     const packagesByRequest = new Map<string, EnrollmentRequestPackageWithCourseType[]>();
-    for (const p of (packagesRes.data ?? []) as EnrollmentRequestPackageWithCourseType[]) {
+    for (const row of (packagesRes.data ?? []) as EnrollmentRequestPackageWithCourseType[]) {
+      const p = { ...row, co_sharer_student_ids: coSharersByPackage.get(row.id) ?? [] };
       const list = packagesByRequest.get(p.enrollment_request_id) ?? [];
       list.push(p);
       packagesByRequest.set(p.enrollment_request_id, list);
@@ -132,9 +166,21 @@ export function useEnrollmentRequests() {
       return { data: null, error: message };
     }
 
+    // Co-sharers live in their own table, so they're stripped out of the line
+    // insert and written against the ids it returns.
     const { data: packageRows, error: packagesError } = await supabase
       .from("enrollment_request_packages")
-      .insert(packages.map((p, i) => ({ ...p, enrollment_request_id: request.id, sort_order: i })))
+      .insert(packages.map((p, i) => ({
+        course_type_id: p.course_type_id,
+        program_type_id: p.program_type_id ?? null,
+        hours: p.hours,
+        package_size_label: p.package_size_label,
+        is_bundle_pool_selection: p.is_bundle_pool_selection ?? false,
+        bundle_pool_label: p.bundle_pool_label ?? null,
+        is_shared: p.is_shared ?? false,
+        enrollment_request_id: request.id,
+        sort_order: i,
+      })))
       .select("*");
 
     if (packagesError || !packageRows || packageRows.length !== packages.length) {
@@ -144,6 +190,34 @@ export function useEnrollmentRequests() {
       const message = packagesError?.message ?? "Failed to save package details";
       setError(message);
       return { data: null, error: message };
+    }
+
+    // A shared line whose co-sharer failed to save would be confirmed later as
+    // a pool shared with nobody — a silently wrong package the family has by
+    // then paid for. Roll the whole request back instead, the same way a
+    // package-less one is.
+    // Matched back by sort_order rather than by position, so nothing depends
+    // on the insert returning rows in the order they were sent.
+    const lineIdBySortOrder = new Map<number, string>(
+      packageRows.map((row) => [row.sort_order as number, row.id as string]),
+    );
+    const memberRows = packages.flatMap((p, i) =>
+      (p.co_sharer_student_ids ?? []).map((studentId) => ({
+        enrollment_request_package_id: lineIdBySortOrder.get(i) as string,
+        student_id: studentId,
+      })),
+    );
+    if (memberRows.length > 0) {
+      const { error: membersError } = await supabase
+        .from("enrollment_request_package_members")
+        .insert(memberRows);
+      if (membersError) {
+        const { error: rollbackError } = await supabase.from("enrollment_requests").delete().eq("id", request.id);
+        setLoading(false);
+        if (rollbackError) console.error("Failed to roll back an enrollment request with unsaved co-sharers:", rollbackError, request.id);
+        setError(membersError.message);
+        return { data: null, error: membersError.message };
+      }
     }
 
     setLoading(false);

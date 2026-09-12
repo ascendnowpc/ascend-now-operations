@@ -145,3 +145,96 @@ export function packageCreateErrorMessage(raw: string): string {
   }
   return raw;
 }
+
+// ── Selling a shared package against an invoice ──────────────────────────
+//
+// The add-package form knows both children up front. The enrollment flow
+// doesn't: the student the invoice is FOR may not exist yet (a new-student
+// enrollment creates them only when the payment is confirmed), so a package
+// line stores only the OTHER child — the co-sharer — and the confirm step adds
+// the enrolling student alongside them.
+
+/** How many OTHER children a shared package line names. */
+export const SHARED_PACKAGE_CO_SHARER_COUNT = SHARED_PACKAGE_STUDENT_COUNT - 1;
+
+/**
+ * The children a package line can be shared WITH.
+ *
+ * Everyone in the household except the student being invoiced — they are a
+ * member by definition and must not be pickable as their own co-sharer (the
+ * database refuses that row outright). `enrollingStudentId` is null on a
+ * new-student enrollment, where nobody is excluded because the new child isn't
+ * in the list yet.
+ */
+export function coSharerCandidates<T extends { id: string }>(
+  children: T[],
+  enrollingStudentId: string | null,
+): T[] {
+  return children.filter((c) => c.id !== enrollingStudentId);
+}
+
+/**
+ * Whether "Shared" can be offered on this enrollment at all.
+ *
+ * It needs a household and at least one other child in it to share with. A
+ * family with one child, or a student with no parent account, can only buy
+ * individually — and the form says so rather than offering a choice that would
+ * fail at confirm.
+ */
+export function canSellShared<T extends { id: string }>(
+  parentId: string | null,
+  children: T[],
+  enrollingStudentId: string | null,
+): boolean {
+  return !!parentId && coSharerCandidates(children, enrollingStudentId).length >= SHARED_PACKAGE_CO_SHARER_COUNT;
+}
+
+/**
+ * Why a shared package line isn't ready to invoice, as the message to show, or
+ * null when it is.
+ */
+export function sharedLineIssue<T extends { id: string }>(
+  parentId: string | null,
+  children: T[],
+  enrollingStudentId: string | null,
+  coSharerIds: string[],
+): string | null {
+  if (!parentId) return "Pick the family this student belongs to before sharing a package.";
+  const candidates = coSharerCandidates(children, enrollingStudentId);
+  if (candidates.length < SHARED_PACKAGE_CO_SHARER_COUNT) {
+    return `A shared package needs ${SHARED_PACKAGE_STUDENT_COUNT} children — this family has no one else to share with.`;
+  }
+  const valid = coSharerIds.filter((id) => candidates.some((c) => c.id === id));
+  if (valid.length !== SHARED_PACKAGE_CO_SHARER_COUNT) {
+    return `Select ${SHARED_PACKAGE_CO_SHARER_COUNT === 1 ? "the other child" : `${SHARED_PACKAGE_CO_SHARER_COUNT} other children`} to share with.`;
+  }
+  return null;
+}
+
+/**
+ * Picks (or unpicks) a child to share a package line with.
+ *
+ * Clicking the selected child clears them. Clicking another one takes a free
+ * slot, and when the slots are full the OLDEST pick makes way — the opposite
+ * of `toggleSharedStudent`, and deliberately: there is one co-sharer slot, so
+ * ignoring the click the way the two-slot picker does would just read as a
+ * broken control rather than as "you already chose".
+ */
+export function pickCoSharer(selected: string[], studentId: string): string[] {
+  if (selected.includes(studentId)) return selected.filter((id) => id !== studentId);
+  const room = [...selected, studentId];
+  return room.slice(Math.max(room.length - SHARED_PACKAGE_CO_SHARER_COUNT, 0));
+}
+
+/**
+ * The "shared with" line on an invoice, or null when the package is
+ * individual.
+ *
+ * A parent paying for hours two children will spend should see that on the
+ * invoice — an Academic package that reads identically to a single-child one
+ * is the sort of thing that gets queried after the fact.
+ */
+export function sharedWithLabel(isShared: boolean, coSharerNames: string[]): string | null {
+  if (!isShared) return null;
+  return coSharerNames.length > 0 ? `Shared with ${joinNames(coSharerNames)}` : "Shared";
+}
