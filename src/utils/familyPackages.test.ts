@@ -12,7 +12,7 @@ import {
   UNKNOWN_SIBLING_COLOR,
   type SiblingUsage,
 } from "./familyPackages";
-import type { StudentPackage, Student } from "../types/database";
+import type { StudentPackage } from "../types/database";
 
 function pkg(over: Partial<StudentPackage> = {}): StudentPackage {
   return {
@@ -35,10 +35,6 @@ function pkg(over: Partial<StudentPackage> = {}): StudentPackage {
     updated_at: "2026-09-01T00:00:00Z",
     ...over,
   };
-}
-
-function stu(id: string, parentId: string | null): Pick<Student, "id" | "parent_id"> {
-  return { id, parent_id: parentId };
 }
 
 function usage(over: Partial<SiblingUsage> = {}): SiblingUsage {
@@ -66,18 +62,23 @@ describe("isFamilyPackage", () => {
 describe("packagesAvailableToStudent — what a child may draw on", () => {
   it("includes the student's own packages", () => {
     const packages = [pkg({ id: 1, student_id: "ELD26-1" })];
-    expect(packagesAvailableToStudent(packages, stu("ELD26-1", "SARK26-1")).map((p) => p.id)).toEqual([1]);
+    expect(packagesAvailableToStudent(packages, "ELD26-1", []).map((p) => p.id)).toEqual([1]);
   });
 
-  it("includes their family's packages", () => {
+  it("includes a shared pool the student is named on", () => {
     const packages = [pkg({ id: 2, parent_id: "SARK26-1" })];
-    expect(packagesAvailableToStudent(packages, stu("ELD26-1", "SARK26-1")).map((p) => p.id)).toEqual([2]);
+    expect(packagesAvailableToStudent(packages, "ELD26-1", [2]).map((p) => p.id)).toEqual([2]);
   });
 
-  it("gives both siblings the same family pool", () => {
+  it("gives both named siblings the same shared pool", () => {
     const packages = [pkg({ id: 2, parent_id: "SARK26-1" })];
-    expect(packagesAvailableToStudent(packages, stu("ELD26-1", "SARK26-1"))).toHaveLength(1);
-    expect(packagesAvailableToStudent(packages, stu("YNG26-2", "SARK26-1"))).toHaveLength(1);
+    expect(packagesAvailableToStudent(packages, "ELD26-1", [2])).toHaveLength(1);
+    expect(packagesAvailableToStudent(packages, "YNG26-2", [2])).toHaveLength(1);
+  });
+
+  it("excludes a sibling's shared pool the student was not named on", () => {
+    const packages = [pkg({ id: 2, parent_id: "SARK26-1" })];
+    expect(packagesAvailableToStudent(packages, "THRD26-3", [])).toEqual([]);
   });
 
   it("excludes another family's pool and another student's own package", () => {
@@ -85,12 +86,12 @@ describe("packagesAvailableToStudent — what a child may draw on", () => {
       pkg({ id: 3, parent_id: "OTHR26-9" }),
       pkg({ id: 4, student_id: "SOME26-8" }),
     ];
-    expect(packagesAvailableToStudent(packages, stu("ELD26-1", "SARK26-1"))).toEqual([]);
+    expect(packagesAvailableToStudent(packages, "ELD26-1", [])).toEqual([]);
   });
 
-  it("gives a student with no parent only their own packages", () => {
+  it("gives a student in no shared pool only their own packages", () => {
     const packages = [pkg({ id: 1, student_id: "ELD26-1" }), pkg({ id: 2, parent_id: "SARK26-1" })];
-    expect(packagesAvailableToStudent(packages, stu("ELD26-1", null)).map((p) => p.id)).toEqual([1]);
+    expect(packagesAvailableToStudent(packages, "ELD26-1", []).map((p) => p.id)).toEqual([1]);
   });
 });
 

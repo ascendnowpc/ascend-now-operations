@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { AdminLayout } from "./AdminLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Spinner } from "../../components/ui/Spinner";
+import { IconPlus } from "../../components/ui/icons";
 import { useAuth } from "../../context/AuthContext";
 import { useCourseTypes } from "../../hooks/useCourseTypes";
 import { useProgramTypes } from "../../hooks/useProgramTypes";
@@ -59,6 +60,7 @@ function initials(first: string, last: string) {
 
 export default function AdminPackagesPage() {
   const navigate = useNavigate();
+  const notice = (useLocation().state as { notice?: string } | null)?.notice ?? null;
   const { profile } = useAuth();
   const { courseTypes } = useCourseTypes();
   const { programTypes } = useProgramTypes();
@@ -160,13 +162,28 @@ export default function AdminPackagesPage() {
     <AdminLayout>
       <PageHeader
         title="Learner's actual hours"
-        description="Track hour balances across all students. Hours are added only through the Add / Renew invoice flow — this view is read-only apart from locking a package generation."
+        description="Track hour balances across all students. Shared pools live on the family's own hours page; this view is read-only apart from locking a package generation."
         action={
-          <Button onClick={() => navigate("/admin/students/enroll")} className="flex items-center gap-2">
-            Add / Renew — send invoice
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => navigate("/admin/packages/new")} className="flex items-center gap-2">
+              <IconPlus /> Add package
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => navigate("/admin/students/enroll")}
+              className="flex items-center gap-2"
+            >
+              Add / Renew — send invoice
+            </Button>
+          </div>
         }
       />
+
+      {notice && (
+        <p className="text-sm text-lime-700 bg-lime-50 border border-lime-100 rounded-lg px-3 py-2 mb-4">
+          {notice}
+        </p>
+      )}
 
       {!loading && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
@@ -214,7 +231,7 @@ export default function AdminPackagesPage() {
       ) : visible.length === 0 ? (
         <Card className="p-6">
           <p className="text-sm text-navy-400">
-            {search ? `No students match "${search}".` : "No packages found. Use “Add / Renew” to send an invoice — the package is created once payment is confirmed."}
+            {search ? `No students match "${search}".` : "No packages found."}
           </p>
         </Card>
       ) : (

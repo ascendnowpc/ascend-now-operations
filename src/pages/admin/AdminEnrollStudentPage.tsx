@@ -13,7 +13,15 @@ import { usePcAssignments } from "../../hooks/usePcAssignments";
 import { useEnrollmentRequests, type NewPackageInput } from "../../hooks/useEnrollmentRequests";
 import { ParentPicker } from "../../components/students/ParentPicker";
 import { useParents } from "../../hooks/useParents";
-import { applyParentToGuardianContact } from "../../utils/parentDirectory";
+import { applyParentToGuardianContact, childrenOf } from "../../utils/parentDirectory";
+import {
+  shareableCourseTypes,
+  coSharerCandidates,
+  canSellShared,
+  sharedLineIssue,
+  pickCoSharer,
+  sharedWithLabel,
+} from "../../utils/sharedPackages";
 import { useStudentPackages, PRESET_HOURS } from "../../hooks/useStudentPackages";
 import { useBundlePoolSettings, type BundlePoolDef } from "../../hooks/useBundlePoolSettings";
 import { buildEnrollmentInvoicePdf } from "../../utils/buildInvoicePdf";
@@ -33,6 +41,10 @@ type PackageDraft = {
   selectedPreset: number | null;
   customHours: string;
   selectedBundlePoolIndex: number | null;
+  // Confirming this line creates a SHARED (parent-owned) pool instead of a
+  // student-owned one, drawn on by this student and `coSharerIds` (2026-09-12).
+  isShared: boolean;
+  coSharerIds: string[];
 };
 
 function emptyPackageDraft(): PackageDraft {
@@ -42,6 +54,8 @@ function emptyPackageDraft(): PackageDraft {
     selectedPreset: PRESET_HOURS[0],
     customHours: "",
     selectedBundlePoolIndex: null,
+    isShared: false,
+    coSharerIds: [],
   };
 }
 
@@ -54,11 +68,21 @@ type PackageInfo = {
   selectedBundlePool: BundlePoolDef | null;
   hours: number;
   packageSizeLabel: string;
+  // Shared only survives while the household still supports it — switching to
+  // a student with no sibling silently makes every shared line individual
+  // again rather than leaving a line that could never be confirmed.
+  isShared: boolean;
+  coSharerIds: string[];
+  /** Course types this line may pick from: shareable ones only when shared. */
+  offeredCourseTypes: CourseType[];
+  /** Why a shared line isn't ready, or null. */
+  sharedIssue: string | null;
 };
 
 function isPackageValid(draft: PackageDraft, info: PackageInfo) {
   return draft.courseTypeId !== "" && !!info.hours && info.hours > 0 &&
-    (!info.isBundle || !info.bundleAlreadyOwned || draft.selectedBundlePoolIndex !== null);
+    (!info.isBundle || !info.bundleAlreadyOwned || draft.selectedBundlePoolIndex !== null) &&
+    info.sharedIssue === null;
 }
 
 export default function AdminEnrollStudentPage() {
@@ -160,7 +184,7 @@ export default function AdminEnrollStudentPage() {
   useEffect(() => {
     if (kind !== "renewal" || !selectedStudent) { setExistingPackages([]); return; }
     let cancelled = false;
-    fetchPackagesForStudent(selectedStudent.id, selectedStudent.parent_id).then((pkgs) => { if (!cancelled) setExistingPackages(pkgs); });
+    fetchPackagesForStudent(selectedStudent.id).then((pkgs) => { if (!cancelled) setExistingPackages(pkgs); });
     return () => { cancelled = true; };
   }, [kind, selectedStudent, fetchPackagesForStudent]);
 
@@ -185,8 +209,34 @@ export default function AdminEnrollStudentPage() {
       .slice(0, 20);
   }, [students, studentSearch]);
 
+  // The household a shared line would belong to, and who is already in it.
+  // A renewal reads it off the student on file; a new enrollment takes it from
+  // the parent picker, where the child being enrolled isn't in the list yet
+  // (they don't exist until the payment is confirmed) — which is exactly why a
+  // line stores only the OTHER children.
+  const householdParentId = kind === "renewal" ? selectedStudent?.parent_id ?? null : parentId;
+  const enrollingStudentId = kind === "renewal" ? selectedStudent?.id ?? null : null;
+  const householdChildren = useMemo(
+    () => childrenOf(students, householdParentId),
+    [students, householdParentId],
+  );
+  const coSharerOptions = coSharerCandidates(householdChildren, enrollingStudentId);
+  const sharingAvailable = canSellShared(householdParentId, householdChildren, enrollingStudentId);
+
   function derivePackageInfo(draft: PackageDraft): PackageInfo {
-    const selectedCourseType = draft.courseTypeId === "" ? null : activeCourseTypes.find((ct) => ct.id === draft.courseTypeId) ?? null;
+    // A line can only still be shared while the household supports it. Derived
+    // rather than written back to the draft, so switching student mid-form
+    // can't leave a line that would be refused at confirm.
+    const isShared = draft.isShared && sharingAvailable;
+    const coSharerIds = isShared
+      ? draft.coSharerIds.filter((id) => coSharerOptions.some((c) => c.id === id))
+      : [];
+    const offeredCourseTypes = isShared ? shareableCourseTypes(courseTypes) : activeCourseTypes;
+    const sharedIssue = isShared
+      ? sharedLineIssue(householdParentId, householdChildren, enrollingStudentId, coSharerIds)
+      : null;
+
+    const selectedCourseType = draft.courseTypeId === "" ? null : offeredCourseTypes.find((ct) => ct.id === draft.courseTypeId) ?? null;
     const bundleDefs = selectedCourseType ? poolDefsByBundle[selectedCourseType.name] : undefined;
     const isBundle = !!bundleDefs;
     const bundleTotalHours = bundleDefs ? bundleDefs.reduce((sum, d) => sum + d.hours, 0) : 0;
@@ -220,13 +270,17 @@ export default function AdminEnrollStudentPage() {
           : "Full bundle (all pools)")
       : hoursLabel;
 
-    return { selectedCourseType, bundleDefs, isBundle, bundleTotalHours, bundleAlreadyOwned, selectedBundlePool, hours, packageSizeLabel };
+    return {
+      selectedCourseType, bundleDefs, isBundle, bundleTotalHours, bundleAlreadyOwned,
+      selectedBundlePool, hours, packageSizeLabel,
+      isShared, coSharerIds, offeredCourseTypes, sharedIssue,
+    };
   }
 
   const packagesInfo = useMemo(
     () => packages.map(derivePackageInfo),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [packages, existingPackages, activeCourseTypes, poolDefsByBundle]
+    [packages, existingPackages, activeCourseTypes, poolDefsByBundle, sharingAvailable, householdParentId, enrollingStudentId, householdChildren]
   );
 
   function addPackageRow() {
@@ -268,6 +322,8 @@ export default function AdminEnrollStudentPage() {
         package_size_label: info.packageSizeLabel,
         is_bundle_pool_selection: info.isBundle && info.bundleAlreadyOwned,
         bundle_pool_label: info.selectedBundlePool ? info.selectedBundlePool.label : null,
+        is_shared: info.isShared,
+        co_sharer_student_ids: info.coSharerIds,
       };
     });
 
@@ -379,6 +435,12 @@ export default function AdminEnrollStudentPage() {
         courseTypeName: activeCourseTypes.find((ct) => ct.id === draft.courseTypeId)?.name ?? "Package",
         packageSizeLabel: packagesInfo[i].packageSizeLabel,
         hours: packagesInfo[i].hours,
+        sharedWith: sharedWithLabel(
+          packagesInfo[i].isShared,
+          packagesInfo[i].coSharerIds.map(
+            (id) => householdChildren.find((c) => c.id === id)?.first_name ?? id,
+          ),
+        ),
       })),
       coordinatorName,
       note: note.trim() || null,
@@ -535,12 +597,69 @@ export default function AdminEnrollStudentPage() {
                   </div>
                 )}
 
+                {sharingAvailable && (
+                  <div>
+                    <label className="block text-xs font-medium text-navy-500 mb-1.5">Ownership</label>
+                    <div className="flex gap-2">
+                      {([false, true] as const).map((shared) => (
+                        <button
+                          key={String(shared)}
+                          type="button"
+                          onClick={() => updatePackageRow(draft.key, {
+                            // The two options offer different course types —
+                            // only Academic and Beyond Academic can be shared
+                            // — so the pick never survives a switch.
+                            isShared: shared,
+                            courseTypeId: "",
+                            selectedBundlePoolIndex: null,
+                            coSharerIds: [],
+                          })}
+                          className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                            info.isShared === shared
+                              ? "border-sky-300 bg-sky-50 text-sky-700"
+                              : "border-navy-100 text-navy-500 hover:border-sky-200"
+                          }`}
+                        >
+                          {shared ? "Shared" : "Individual"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {info.isShared && (
+                  <div>
+                    <label className="block text-xs font-medium text-navy-500 mb-1.5">Shared with</label>
+                    <div className="flex flex-wrap gap-2">
+                      {coSharerOptions.map((c) => {
+                        const picked = info.coSharerIds.includes(c.id);
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => updatePackageRow(draft.key, { coSharerIds: pickCoSharer(info.coSharerIds, c.id) })}
+                            className={`inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-xs font-medium transition-colors ${
+                              picked
+                                ? "border-sky-300 bg-sky-50 text-sky-700"
+                                : "border-navy-100 text-navy-500 hover:border-sky-200"
+                            }`}
+                          >
+                            {c.first_name} {c.last_name}
+                            <span className="font-mono opacity-70">{c.id}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {info.sharedIssue && <p className="text-xs text-navy-400 mt-2">{info.sharedIssue}</p>}
+                  </div>
+                )}
+
                 <SelectInput
                   label="Course type"
                   placeholder="Select a package type…"
                   value={draft.courseTypeId === "" ? "" : String(draft.courseTypeId)}
                   onChange={(e) => updatePackageRow(draft.key, { courseTypeId: e.target.value ? Number(e.target.value) : "", selectedBundlePoolIndex: null })}
-                  options={activeCourseTypes.map((ct) => ({ value: String(ct.id), label: ct.name }))}
+                  options={info.offeredCourseTypes.map((ct) => ({ value: String(ct.id), label: ct.name }))}
                   required
                 />
 

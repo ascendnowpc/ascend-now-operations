@@ -10,20 +10,31 @@ export function useStudentPackages() {
   const [error, setError] = useState<string | null>(null);
 
   // Every package a student can draw on, each with its topup history: their
-  // own, PLUS their family's — a pool bought once by the parent and shared by
-  // every sibling (2026-09-11). `parentId` is the student's own
-  // `students.parent_id`; pass null/undefined for a student with no family
-  // account and this behaves exactly as it always did.
+  // own, PLUS the shared pools they were NAMED on (2026-09-12). Belonging to
+  // the owning household is no longer enough — a sibling left off a shared
+  // pool can't spend it, so the membership rows are read first and the
+  // packages fetched by id.
   //
-  // The `or` filter mirrors the `student_package_ids()` SQL helper that the
-  // session-log trigger routes deductions through, so what a student is shown
-  // they can spend is the same set the database actually lets them spend. RLS
+  // This mirrors the `student_package_ids()` SQL helper that the session-log
+  // trigger routes deductions through, so what a student is shown they can
+  // spend is the same set the database actually lets them spend. RLS
   // (can_view_package) independently enforces the same thing.
-  const fetchPackagesForStudent = useCallback(async (studentId: string, parentId?: string | null) => {
+  const fetchPackagesForStudent = useCallback(async (studentId: string) => {
     setLoading(true);
+    const { data: memberRows, error: memberErr } = await supabase
+      .from("student_package_members")
+      .select("student_package_id")
+      .eq("student_id", studentId);
+    if (memberErr) {
+      setLoading(false);
+      setError(memberErr.message);
+      return [];
+    }
+    const sharedIds = (memberRows ?? []).map((r) => r.student_package_id as number);
+
     let query = supabase.from("student_packages").select("*, package_topups(*)");
-    query = parentId
-      ? query.or(`student_id.eq.${studentId},parent_id.eq.${parentId}`)
+    query = sharedIds.length > 0
+      ? query.or(`student_id.eq.${studentId},id.in.(${sharedIds.join(",")})`)
       : query.eq("student_id", studentId);
     const { data, error } = await query.order("created_at", { ascending: true });
     setLoading(false);
@@ -53,13 +64,41 @@ export function useStudentPackages() {
     return (data ?? []) as (StudentPackage & { package_topups: PackageTopup[] })[];
   }, []);
 
-  // Creates a family pool — owned by the parent, drawn down by every one of
-  // their children. Separate from createLabeledPackage rather than a flag on
-  // it, because the two are mutually exclusive at the database level
+  // Hours arrive as a top-up rather than as total_hours_purchased directly, so
+  // the purchase shows up in the package's history the same way every later
+  // renewal will — on_package_topup_inserted() is what actually moves
+  // total_hours_purchased.
+  const addInitialHours = useCallback(async (opts: {
+    packageId: number;
+    initialHours: number;
+    note?: string | null;
+    addedByUserId: string;
+  }) => {
+    const { error } = await supabase.from("package_topups").insert({
+      student_package_id: opts.packageId,
+      hours_added: opts.initialHours,
+      package_size_label: `${opts.initialHours} hours`,
+      note: opts.note ?? null,
+      added_by_user_id: opts.addedByUserId,
+    });
+    return error?.message ?? null;
+  }, []);
+
+  // Creates a SHARED pool: owned by the parent, drawn down by the two children
+  // named in `studentIds` and by nobody else. Separate from
+  // createIndividualPackage rather than a flag on it, because the two
+  // ownerships are mutually exclusive at the database level
   // (student_packages_one_owner) and a single function taking both ids would
   // just be a runtime error waiting to happen.
-  const createFamilyPackage = useCallback(async (opts: {
+  //
+  // The membership rows go in before the hours do, and a package whose members
+  // are refused (a non-shareable course type, a child of another household, a
+  // third sibling — all enforced by triggers) is deleted again rather than
+  // left behind as an ownerless pool an admin would have to notice and clean
+  // up.
+  const createSharedPackage = useCallback(async (opts: {
     parentId: string;
+    studentIds: string[];
     courseTypeId: number;
     packageTypeId?: number | null;
     poolLabel?: string | null;
@@ -78,23 +117,65 @@ export function useStudentPackages() {
       .select()
       .single();
     if (error || !data) return { data: null, error: error?.message ?? "Failed to create package" };
+    const pkg = data as StudentPackage;
 
-    // Hours arrive as a top-up rather than as total_hours_purchased directly,
-    // so the purchase shows up in the package's history the same way every
-    // later renewal will — on_package_topup_inserted() is what actually moves
-    // total_hours_purchased.
-    const { error: topupErr } = await supabase.from("package_topups").insert({
-      student_package_id: (data as StudentPackage).id,
-      hours_added: opts.initialHours,
-      package_size_label: `${opts.initialHours} hours`,
-      note: opts.note ?? null,
-      added_by_user_id: opts.addedByUserId,
-    });
-    if (topupErr) {
-      return { data: data as StudentPackage, error: `Package created but adding hours failed: ${topupErr.message}` };
+    const { error: memberErr } = await supabase.from("student_package_members").insert(
+      opts.studentIds.map((studentId) => ({
+        student_package_id: pkg.id,
+        student_id: studentId,
+        added_by_user_id: opts.addedByUserId,
+      })),
+    );
+    if (memberErr) {
+      await supabase.from("student_packages").delete().eq("id", pkg.id);
+      return { data: null, error: memberErr.message };
     }
-    return { data: data as StudentPackage, error: null };
-  }, []);
+
+    const topupErr = await addInitialHours({
+      packageId: pkg.id,
+      initialHours: opts.initialHours,
+      note: opts.note,
+      addedByUserId: opts.addedByUserId,
+    });
+    if (topupErr) return { data: pkg, error: `Package created but adding hours failed: ${topupErr}` };
+    return { data: pkg, error: null };
+  }, [addInitialHours]);
+
+  // Creates an INDIVIDUAL pool: owned by one student, nobody else draws on it.
+  // Any course type, including the bundles a shared package can't hold — the
+  // caller creates one of these per bundle pool, exactly as
+  // review-enrollment-payment does.
+  const createIndividualPackage = useCallback(async (opts: {
+    studentId: string;
+    courseTypeId: number;
+    packageTypeId?: number | null;
+    poolLabel?: string | null;
+    initialHours: number;
+    note?: string | null;
+    addedByUserId: string;
+  }) => {
+    const { data, error } = await supabase
+      .from("student_packages")
+      .insert({
+        student_id: opts.studentId,
+        course_type_id: opts.courseTypeId,
+        package_type_id: opts.packageTypeId ?? null,
+        pool_label: opts.poolLabel ?? null,
+      })
+      .select()
+      .single();
+    if (error || !data) return { data: null, error: error?.message ?? "Failed to create package" };
+    const pkg = data as StudentPackage;
+
+    const topupErr = await addInitialHours({
+      packageId: pkg.id,
+      initialHours: opts.initialHours,
+      note: opts.note,
+      addedByUserId: opts.addedByUserId,
+    });
+    if (topupErr) return { data: pkg, error: `Package created but adding hours failed: ${topupErr}` };
+    return { data: pkg, error: null };
+  }, [addInitialHours]);
 
   // Fetch or create the *current* package row for a student+course_type
   // combination — i.e. the unlocked one. A student can have any number of
@@ -460,7 +541,8 @@ export function useStudentPackages() {
     error,
     fetchPackagesForStudent,
     fetchPackagesForParent,
-    createFamilyPackage,
+    createSharedPackage,
+    createIndividualPackage,
     getOrCreatePackage,
     createLabeledPackage,
     addTopup,

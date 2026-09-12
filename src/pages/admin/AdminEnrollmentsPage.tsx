@@ -14,9 +14,11 @@ import { IconPlus } from "../../components/ui/icons";
 import { useEnrollmentRequests, type EnrollmentRequestWithDetails } from "../../hooks/useEnrollmentRequests";
 import { useTeachers } from "../../hooks/useTeachers";
 import { usePcAssignments } from "../../hooks/usePcAssignments";
+import { useStudents } from "../../hooks/useStudents";
 import { buildEnrollmentInvoicePdf } from "../../utils/buildInvoicePdf";
 import { invalidateCachePrefix } from "../../lib/cache";
-import type { EnrollmentStatus } from "../../types/database";
+import { sharedWithLabel } from "../../utils/sharedPackages";
+import type { EnrollmentStatus, Student } from "../../types/database";
 
 const STATUS_LABEL: Record<EnrollmentStatus, string> = {
   pending_payment: "Awaiting Payment",
@@ -38,6 +40,22 @@ function fullName(e: EnrollmentRequestWithDetails) {
 
 function packageLabel(p: EnrollmentRequestWithDetails["packages"][number]) {
   return p.course_types?.name ?? `Type ${p.course_type_id}`;
+}
+
+// "Shared with Elif" on a line that will become a parent-owned pool. The
+// co-sharer is stored by id, so the name is looked up against the students
+// list and falls back to the id rather than dropping the fact that it's shared.
+function sharedWithFor(
+  p: EnrollmentRequestWithDetails["packages"][number],
+  students: Student[],
+) {
+  return sharedWithLabel(
+    p.is_shared,
+    p.co_sharer_student_ids.map((id) => {
+      const s = students.find((st) => st.id === id);
+      return s ? `${s.first_name} ${s.last_name}`.trim() : id;
+    }),
+  );
 }
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
@@ -80,6 +98,9 @@ export default function AdminEnrollmentsPage() {
   } = useEnrollmentRequests();
   const { teachers } = useTeachers();
   const { getPcForStudent } = usePcAssignments();
+  // Only to name the co-sharer on a shared package line, which the request
+  // itself stores by student id.
+  const { students } = useStudents();
 
   const [rows, setRows] = useState<EnrollmentRequestWithDetails[]>([]);
   const [statusFilter, setStatusFilter] = useState<EnrollmentStatus | "all">("all");
@@ -205,6 +226,7 @@ export default function AdminEnrollmentsPage() {
         courseTypeName: packageLabel(p),
         packageSizeLabel: p.package_size_label,
         hours: p.hours,
+        sharedWith: sharedWithFor(p, students),
       })),
       coordinatorName,
       note: e.note,
@@ -331,6 +353,7 @@ export default function AdminEnrollmentsPage() {
             <p key={p.id} className="text-xs">
               <span className="text-navy-700 font-medium">{packageLabel(p)}</span>
               <span className="text-navy-300"> · {p.hours} hrs</span>
+              {p.is_shared && <span className="text-sky-600"> · {sharedWithFor(p, students)}</span>}
             </p>
           ))}
         </div>
@@ -550,7 +573,12 @@ export default function AdminEnrollmentsPage() {
                   <div className="flex flex-col gap-1.5">
                     {viewTarget.packages.map((p, i) => (
                       <div key={p.id} className="flex justify-between gap-3">
-                        <span>{viewTarget.packages.length > 1 ? `${i + 1}. ` : ""}{packageLabel(p)} — {p.package_size_label}</span>
+                        <span>
+                          {viewTarget.packages.length > 1 ? `${i + 1}. ` : ""}{packageLabel(p)} — {p.package_size_label}
+                          {p.is_shared && (
+                            <span className="text-sky-600"> · {sharedWithFor(p, students)}</span>
+                          )}
+                        </span>
                         <span className="text-navy-400 shrink-0">{p.hours} hrs</span>
                       </div>
                     ))}

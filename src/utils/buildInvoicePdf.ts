@@ -113,6 +113,11 @@ export type EnrollmentInvoicePackageLine = {
   courseTypeName: string;
   packageSizeLabel: string;
   hours: number;
+  // "Shared with Elif" on a package two children will draw on, null on an
+  // ordinary one (2026-09-12). A family paying for hours their second child
+  // will also spend should be able to see that on the invoice rather than
+  // find out afterwards — see sharedWithLabel in utils/sharedPackages.ts.
+  sharedWith?: string | null;
 };
 
 export type EnrollmentInvoiceData = {
@@ -182,7 +187,11 @@ export function buildEnrollmentInvoicePdf(data: EnrollmentInvoiceData): jsPDF {
     head: [["Course Type", "Package", "Hours"]],
     headStyles: { fillColor: NAVY as [number, number, number], textColor: 255, fontSize: 9.5 },
     styles: { fontSize: 9.5 },
-    body: data.packages.map((p) => [p.courseTypeName, p.packageSizeLabel, `${p.hours} hrs`]),
+    body: data.packages.map((p) => [
+      p.courseTypeName,
+      p.sharedWith ? `${p.packageSizeLabel}\n${p.sharedWith}` : p.packageSizeLabel,
+      `${p.hours} hrs`,
+    ]),
     foot: data.packages.length > 1 ? [["", "Total", `${totalHours} hrs`]] : undefined,
     footStyles: { fillColor: SKY_LIGHT as [number, number, number], textColor: NAVY_DARK as [number, number, number], fontStyle: "bold" },
     columnStyles: { 2: { halign: "right" } },

@@ -46,7 +46,7 @@ export function StudentPackagesView({ student }: { student: Student }) {
     let cancelled = false;
     async function load() {
       setLoading(true);
-      const [pkgs, sess] = await Promise.all([fetchPackagesForStudent(student.id, student.parent_id), fetchSessionsForBalance(student.id)]);
+      const [pkgs, sess] = await Promise.all([fetchPackagesForStudent(student.id), fetchSessionsForBalance(student.id)]);
       if (cancelled) return;
       setPackages(pkgs);
       setSessions(sess as BalanceSession[]);

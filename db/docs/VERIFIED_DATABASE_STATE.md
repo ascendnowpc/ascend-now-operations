@@ -2,6 +2,60 @@
 
 **Generated 2026-07-01 by direct introspection of the live Supabase project (`ascend-now`, ref `uqyuczvckqxgtilpzarh`, org `ascend-now`) via the Supabase MCP connection — every table, column, constraint, policy, function, and trigger below was read straight from the running Postgres instance, not from the migration files or any prior doc.**
 
+**Updated 2026-09-12, later (the invoice flow can sell a shared package, renewal tracking can see one, and every existing pool went back to being Batu's).** Applied via `supabase/migrations/20260912000100_batu_packages_back_to_individual.sql` (data only), `20260912000200_shared_packages_in_enrollment_flow.sql` and `20260912000300_coordinator_logs_see_shared_pools.sql`, all through Supabase MCP `apply_migration`, verified live.
+
+**1. Nothing is shared any more, and everything belongs to Batu.** The 2026-09-11 migration had moved all six of his pools onto the household so his sibling could draw on them, and the membership backfill earlier today then named both children on each. Neither matched what was actually bought — the hours were sold for Batu. All six pools are **student-owned by `BATO26-1`** again, all 12 membership rows are gone, and `TESX26-5`'s single session log (0.75 hrs on the Academic pool, 2026-09-11, a test of sharing rather than a lesson) was deleted first so `recompute_package_hours_used()` took those hours back off while the pool still existed: Academic is **86.75 / 100** again. Live state is now **6 packages, 0 members, 0 parent-owned pools, 87 session logs, 0 for TESX26-5**. Sharing stays fully built and has no live data; every shared package from here on is one an admin deliberately creates. That also retires the "five grandfathered non-shareable shared pools" open item — those five are individual now, so `is_shareable` has no live exception left.
+
+**2. `enrollment_request_packages.is_shared` + `enrollment_request_package_members`.** `/admin/packages/new` could create a shared package from the moment sharing landed, but that form involves no money; anything sold **against an invoice** still came out student-owned. A package line can now be marked shared, and confirming the payment creates the parent-owned pool with its two members instead.
+
+Only the **co-sharers** are stored: `enrollment_request_package_members (enrollment_request_package_id uuid → enrollment_request_packages ON DELETE CASCADE, student_id text → students ON DELETE CASCADE, created_at)`, PK on both ids, plus `idx_enrollment_request_package_members_student_id`. The student the request is FOR is always a member, and on a **new-student** enrollment that student has no id until `review-enrollment-payment` creates them — so the row records the other child, who already exists and can carry a real FK, and the confirm step adds the enrolling student alongside them. That also makes the row mean the same thing on a renewal and on a first enrollment. RLS is admin-only (`admin_all_enrollment_request_package_members`), matching the line items themselves; `select/insert/update/delete` granted to `authenticated` and `service_role`.
+
+Two intake triggers refuse a request that could never be confirmed, at the moment it is written rather than after the family has paid:
+- **`validate_enrollment_request_package_share()`** on `enrollment_request_packages` (BEFORE INSERT OR UPDATE OF `is_shared`, `course_type_id`) — a shared line's course type must be `is_shareable`.
+- **`validate_enrollment_request_package_member()`** on `enrollment_request_package_members` (BEFORE INSERT OR UPDATE) — the line must exist and be shared, and the co-sharer must not be the student the request is already for.
+
+**3. `coordinator_log_package_status_rows()` and the sync trigger go through `student_package_ids()`.** The function enumerated a student's packages as `sp.student_id = p_student_id`, which was every package there was when it was written. Since parent ownership existed, a shared pool at 80% used appeared in **neither** child's coordinator log — not Upcoming, not In Discussion, not at all — so the renewal lifecycle a PC and an admin work from silently skipped shared hours. Both its loops (the package loop and the phantom-row `NOT EXISTS`) now use `student_package_ids(p_student_id)`, so a shared pool appears in the log of each of the two children named on it. `trg_sync_coordinator_log_pkg()` passed `new.student_id`, NULL on a shared pool, so `sync_coordinator_log_for_student(null)` quietly did nothing; it now fans out to the pool's members. And because a brand-new shared pool has no members at INSERT time (they are written immediately afterwards), a new `trg_sync_coordinator_log_spm` on `student_package_members` (AFTER INSERT OR DELETE) makes naming a child on a pool a sync trigger in its own right.
+
+**Verified live** (every write inside a rolled-back transaction; state re-confirmed at 6 packages / 0 members / 0 shared afterwards):
+- All four intake guards rejected with their own messages: a shared **College Counselling** line; the request's own student as their own co-sharer; a co-sharer on an **individual** line; and (from the earlier migration) the package-level rules.
+- The confirm step's own sequence — insert a parent-owned pool, insert both members, insert the top-up — produced `parent=DEVG26-5`, members `BATO26-1, TESX26-5`, **50 purchased**.
+- `coordinator_log_package_status_rows()` returned that pool for **both** `BATO26-1` and `TESX26-5` (`not_due`), which it could not do before this migration.
+
+**Edge functions redeployed:** `review-enrollment-payment` (v12) resolves the household and the co-sharers **before any package write**, so a request that cannot produce a valid shared pool fails with zero side effects; creates the pool under `parent_id` instead of `student_id`; names both children on a brand-new pool before hours land on it (deleting the pool again if that fails); refuses to top up an existing shared pool whose members differ from the ones the line names; refuses a shared bundle outright; and names the co-sharer in the confirmation email. `send-enrollment-invoice` (v11) names the co-sharer on the invoice email, and the invoice PDF does the same via `buildEnrollmentInvoicePdf`'s new per-line `sharedWith`.
+
+**Updated 2026-09-12 (shared packages go to TWO NAMED children, and only for the course types sold that way — new `student_package_members` table, `course_types.is_shareable`, two validating triggers, membership-aware `student_package_ids()`/RLS/usage RPC).** Applied to the live project (ref `rpavogsdladesmghwodg`) via Supabase MCP `apply_migration` as `supabase/migrations/20260912000000_shared_package_members.sql`, verified live by impersonation.
+
+Family packages as shipped on 2026-09-11 let **every** child of the owning parent spend the pool, for **any** course type. Two business rules change that: only Academic and Beyond Academic (where Passion Projects live) are sold as shared hours, and a shared package goes to exactly **two children an admin names** — the parent is never asked to choose, and a third sibling must not quietly start drawing on a pool sold for two.
+
+So `parent_id` still says which household owns a pool (it is what groups it on the family's page and what `student_packages_one_current_per_family_course_type` keys on), but it no longer says who may spend it. **`student_package_members` does.**
+
+**Schema:**
+- `course_types.is_shareable boolean NOT NULL DEFAULT false` — true for **Academic** and **Beyond Academic** only. A column rather than a name list in code, so selling a new programme as shared is one row edit; the default of false means a new course type is bought per student until someone says otherwise. Foundation Program / All-In-One stay false: every bundle contains a College Counselling pool.
+- `student_package_members (student_package_id bigint → student_packages ON DELETE CASCADE, student_id text → students ON DELETE CASCADE, added_by_user_id uuid → auth.users, created_at timestamptz)`, PK `(student_package_id, student_id)`, plus `idx_student_package_members_student_id`. RLS enabled; `select/insert/update/delete` granted to `authenticated` and `service_role`.
+
+**Backfilled** with every child currently linked to the owning parent, so nothing live changed hands: **12 rows** — both of `DEVG26-5`'s children (`BATO26-1`, `TESX26-5`) on all six of that family's pools.
+
+**Two validating triggers** (both SECURITY DEFINER, `SET search_path = public`) — a CHECK constraint can't reach another table, so these are the enforcement:
+- **`validate_student_package_member()`** on `student_package_members` (BEFORE INSERT OR UPDATE) — the package must exist and be parent-owned, the student must be a child of that same parent, and a package already holding 2 other members refuses a third. **Change the 2 here and in `SHARED_PACKAGE_STUDENT_COUNT` (`src/utils/sharedPackages.ts`) together.**
+- **`validate_shared_package_course_type()`** on `student_packages` (BEFORE INSERT OR **UPDATE OF `parent_id`, `course_type_id`**) — a parent-owned package's course type must be `is_shareable`. Scoping the UPDATE to those two columns is deliberate and load-bearing twice over: `recompute_package_hours_used()`'s `hours_used` writes never trip it, and the **pre-existing non-shareable family pools are grandfathered** rather than the migration guessing which single child should inherit `DEVG26-5`'s College Counselling and All-In-One pools. Those five legacy pools remain shared; the rule binds every package created from here on.
+
+**`student_package_ids(p_student_id text)` rewritten** — a student's own packages `UNION` the shared packages they are a **named member of**. Being a child of the owning parent is no longer part of the definition, so the session-log router, RLS and the UI's fetch all narrow together.
+
+**`can_view_package` / `is_my_assigned_package` re-signed to take the package id** (`(p_package_id bigint, p_student_id text, p_parent_id text)`), because membership is per package and the two-argument versions had no way to ask. `can_view_package` now admits the parent themselves **or a child named on that pool**; `is_my_assigned_package` reaches a shared pool through any **member** on the coach's roster. The 2026-09-11 two-argument versions were dropped after the five policies that used them (`student_parent_read_packages`, `pc_manage_assigned_packages` on `student_packages`; `student_parent_read_topups`, `pc_select_own_topups`, `pc_insert_own_topups` on `package_topups`) were recreated against the new ones.
+
+**Three new policies on `student_package_members`:** `admin_all_package_members` (`is_admin()`), `student_parent_read_package_members` (membership rows follow their package's visibility — if you may see the pool, you may see who shares it) and `pc_manage_assigned_package_members`.
+
+**`family_package_usage_by_student(p_package_id bigint)` widened** to return a row for **every named member**, spent or not (0 sessions / 0 hours), `UNION`ed with anyone who has actually drawn on the pool — so a legacy pool's usage is still fully attributed, and "shared by Batu and Test1" now reads off the same single call that says who spent what. The caller-can-see-the-package guard is unchanged.
+
+**Verified live** (every write inside a rolled-back transaction; afterwards re-confirmed at 6 packages / 12 members / 88 session logs / 2 students):
+- Guards, each rejected with its own message: a shared **College Counselling** package (`"College Counselling is bought per student and cannot be shared between siblings."`); a member on a **missing** package; a member on a **student-owned** package; a **third** member on a package that already has two (`"A shared package is shared by 2 students; package 17 already has 2."`); a duplicate member (the PK).
+- Impersonating **Batu** (`set local role authenticated` + his `sub` claim) with membership intact: **6** packages, **12** member rows, and `family_package_usage_by_student(1)` returning `BATO26-1 = 86.75`, `TESX26-5 = 0.75`.
+- The same impersonation with **his** member row on pool 1 deleted first: **5** packages, **10** member rows, **5** topups, and the usage RPC on pool 1 returning **no rows** — the pool, its top-ups, its membership and its usage all disappear together for a non-member.
+- `student_package_ids('BATO26-1')` then excludes pool 1 while `student_package_ids('TESX26-5')` still includes it.
+- **The router honours it too**: an Academic session logged for Batu with his membership removed did **not** deduct from the family's 100-hour Academic pool — it created a fresh **zero-hour, student-owned** fallback pool (`pool_fallback_used = true`, `pool_ambiguous = false`), exactly as it would for a student with no package at all. With membership intact the same session routes to pool 1 (`parent_id = DEVG26-5`, `pool_fallback_used = false`).
+
+**Edge function redeployed:** `notify-package-threshold` (version 11, `verify_jwt` unchanged at true). It resolved the PC to email via `student_packages.student_id`, which is **NULL on every shared pool** — so since family packages shipped on 2026-09-11, a shared pool could run to 100% or go over limit and nobody was ever emailed (`.eq("student_id", null)` matched no assignment, and the function returned `skipped: "Student has no assigned PC"`). It now falls back to the session log's own `student_id` — the child who actually sat the session that crossed the threshold, whose coach is the one who can act on it.
+
 **Updated 2026-09-11, later (data only — Batu Ozcelik's six packages moved to his family, his sibling's unused Academic pool deleted).** Applied via `supabase/migrations/20260911000100_move_batu_packages_to_family.sql`, verified live. No schema change.
 
 Family packages shipped earlier the same day, but Batu's hours were bought long before his parent account existed, so all six pools were still student-owned and invisible to his sibling. The family is `DEVG26-5` (devender gupta) with two children: `BATO26-1` (Batu, 6 packages) and `TESX26-5` (Test1, 1 unused Academic package).
@@ -488,6 +542,7 @@ Also relocated both admin-editable no-show constants into one place: a new **Set
 | `session_logs` | 86 | Core session-logging table — `BATO26-1`'s 69 Academic logs across 6 teachers, 2025-12-30 → 2026-05-10 (seeded 2026-07-28); 12 College Counselling logs by Sumer Broota, 2026-01-13 → 2026-07-17; 3 Beyond Academic / Passion Project logs by David, 2026-06-07 → 2026-06-20; and 2 non-billable Demo Lessons (one per teacher) — all seeded 2026-08-01 |
 | `student_packages` | 6 | Hour packages purchased per student/course type. `BATO26-1`'s standalone 100-hour Academic package (seeded 2026-07-28; 85.75 hrs used) + the 5 pools of his All-In-One bundle (seeded 2026-08-01; 122 hrs, of which the College Counselling pool is 9.25/40 used) |
 | `package_topups` | 6 | Additions to a student package's purchased hours — the 100-hour top-up that funded `BATO26-1`'s Academic package, plus one per All-In-One pool |
+| `student_package_members` | 0 | Which two children draw on a shared (parent-owned) package (added 2026-09-12). Backfilled with both of `DEVG26-5`'s children on all six pools, then emptied later the same day when those pools went back to being Batu's own — see the changelog at the top of this file. The mechanism is live; no shared package currently exists |
 | `session_log_pool_resolutions` | 1 | Sticky (teacher, subject) → pool cache used to auto-resolve which of a student's several concurrent same-course-type pools a session counts against (see 2026-07-02 multi-pool note above). The one row: Batu + Beyond Academic + David + Passion Projects → the All-In-One bundle's "Primary Project" pool, recorded 2026-08-01 when the PC resolved his first Passion Project session |
 | `invoices` | 0 | Generated invoices per student per period |
 | `invoice_line_items` | 0 | Per-teacher/subject line items on an invoice |
@@ -501,6 +556,7 @@ Also relocated both admin-editable no-show constants into one place: a new **Set
 | `zoom_invoices` | 0 | Teacher-uploaded Zoom invoice files, per month |
 | `enrollment_requests` | 0 | New-student / renewal invoice + payment-link requests, from submission through admin confirmation (added 2026-07-02). Emptied by the 2026-07-27 purge (was 5). Package and payment-proof details split out into the two child tables below as of 2026-07-25 |
 | `enrollment_request_packages` | 0 | One row per package on an enrollment request's invoice — a request can carry more than one (added 2026-07-25). Emptied by the 2026-07-27 purge (was 5) |
+| `enrollment_request_package_members` | 0 | The other children a shared package line on an enrollment request is to be shared with (added 2026-09-12). Empty — no shared package has been sold through the invoice flow yet |
 | `enrollment_request_payment_proofs` | 0 | One row per uploaded payment screenshot on an enrollment request — a request can carry more than one (added 2026-07-25). Emptied by the 2026-07-27 purge (was 5) |
 | `no_show_settings` | 1 | Single-row settings table — the fixed amount paid to a teacher for a No Show 2 or No Show + (added 2026-07-04) |
 | `session_duration_settings` | 1 | Single-row settings table — the default duration (hrs) applied to a new No Show + log only (added 2026-07-04; scope corrected 2026-07-05 — see changelog) |
@@ -702,6 +758,7 @@ Now a self-referencing hierarchy (e.g. "Offline Work" is a parent with children 
 | color | text | NO | 'slate' |
 | sort_order | smallint | NO | 0 |
 | is_active | boolean | NO | true |
+| is_shareable | boolean | NO | false | (added 2026-09-12) may hours of this type be bought once and shared between two siblings? True for **Academic** and **Beyond Academic** only. Enforced on every parent-owned package by `validate_shared_package_course_type()` |
 | created_at | timestamptz | NO | now() |
 
 ### `subject_categories`
@@ -801,7 +858,7 @@ Unique index `subjects_name_cat_no_group_idx` on `(name, category_id)` **where `
 |---|---|---|---|
 | id | bigint (identity) | NO | — |
 | student_id | text → `students.id` | **YES** (since 2026-09-11) | — the owning student, for an ordinary package |
-| parent_id | text → `parents.id` | YES | — (added 2026-09-11) the owning parent, for a **FAMILY** package every one of their children draws on. `CHECK student_packages_one_owner`: exactly one of `student_id`/`parent_id` is set |
+| parent_id | text → `parents.id` | YES | — (added 2026-09-11) the owning parent, for a **SHARED** package. `CHECK student_packages_one_owner`: exactly one of `student_id`/`parent_id` is set. **As of 2026-09-12 this says which household owns the pool, not who may spend it** — that is the two children named in `student_package_members`, and a sibling left off the pool cannot draw on it |
 | program_type_id | smallint → `program_types.id` | YES | — |
 | total_hours_purchased | numeric | NO | 0 | CHECK: `>= 0` |
 | hours_used | numeric | NO | 0 | (added 2026-08-01) Stored, DB-maintained "used hours" total for this package — `SUM(session_duration_hrs)` of its linked `session_logs`, excluding No Show 1/2. Kept correct by `recompute_package_hours_used()` on every session insert/update/delete (including moves between packages), so the balance is an authoritative saved figure rather than a client-side re-count. Equals `computeHoursUsed()`'s package-scoped result; the frontend now reads this column for the headline per-package balance (per-subject/per-teacher breakdowns still aggregate the session rows). See `supabase/migrations/20260801000000_stored_package_hours_used.sql`. |
@@ -846,6 +903,20 @@ Because subject alone couldn't always reliably indicate which pool a given Beyon
 | created_at | timestamptz | NO | now() |
 
 A trigger (`on_package_topup_inserted`) automatically adds `hours_added` onto the parent package's `total_hours_purchased`.
+
+### `student_package_members` (added 2026-09-12)
+| Column | Type | Nullable | Default |
+|---|---|---|---|
+| student_package_id | bigint → `student_packages.id` ON DELETE CASCADE | NO | — | PK part 1 |
+| student_id | text → `students.id` ON DELETE CASCADE | NO | — | PK part 2; also `idx_student_package_members_student_id` |
+| added_by_user_id | uuid → `auth.users.id` | YES | — | the admin who assigned this child; null on the backfilled rows |
+| created_at | timestamptz | NO | now() |
+
+Which children draw on a **shared** (parent-owned) package. Owning the pool and spending it are two different things as of 2026-09-12: `student_packages.parent_id` says which household bought the hours, and these rows say which **two** of that household's children may actually use them. A sibling not named here cannot see the pool, cannot see its top-ups, and a session logged for them lands on a fresh zero-hour fallback pool of their own rather than deducting from the family's — verified live, see the changelog entry at the top of this file.
+
+`validate_student_package_member()` (BEFORE INSERT OR UPDATE) enforces all three rules a CHECK constraint cannot reach another table to enforce: the package must be **parent-owned** (a student-owned package has no members by definition), the student must be a **child of that same parent**, and a package already holding **2** other members refuses a third. The count of 2 is the business rule "2 students per programme"; change it here and in `SHARED_PACKAGE_STUDENT_COUNT` (`src/utils/sharedPackages.ts`) together.
+
+RLS mirrors `student_packages`: `admin_all_package_members` (`is_admin()`), `student_parent_read_package_members` (the rows follow their package's own visibility through `can_view_package()`, so anyone who may see the pool may see who shares it) and `pc_manage_assigned_package_members` (through `is_my_assigned_package()`).
 
 ### `session_log_pool_resolutions`
 | Column | Type | Nullable | Default |
@@ -1042,9 +1113,21 @@ Invoice/student details are **snapshotted** on this row (not read live off `stud
 | bundle_pool_label | text | YES | — | identifies which of the bundle's pool definitions (matched by label against `bundle_pool_settings`) this line tops up. Itself nullable — a bundle's default/unlabeled pool is a valid target — so `is_bundle_pool_selection` is what distinguishes "no selection" from "the unlabeled pool was selected" |
 | resulting_student_package_id | bigint → `student_packages.id` | YES | — | set once confirmed — stamped per line, since a multi-package confirm can resolve to several different `student_packages` rows |
 | is_new_package_generation | boolean | YES | — | true if confirmation started a fresh package/pool for this line (no prior unlocked one existed) rather than topping up an existing one |
+| is_shared | boolean | NO | `false` | (added 2026-09-12) confirming this line creates a **SHARED** (parent-owned) pool rather than a student-owned one. Its members are the request's own student plus the children in `enrollment_request_package_members`. `validate_enrollment_request_package_share()` refuses it for a course type that isn't `is_shareable` |
 | created_at | timestamptz | NO | now() |
 
 RLS: `admin_all_enrollment_request_packages` (`FOR ALL USING (is_admin()) WITH CHECK (is_admin())`, mirrors `enrollment_requests`). Grants: `authenticated`/`service_role` both `SELECT, INSERT, UPDATE, DELETE`. `idx_enrollment_request_packages_request_id` indexes `enrollment_request_id`. Verified live: 5 rows (1:1 backfill from the 5 pre-existing `enrollment_requests` rows, each of which had exactly one package before this split).
+
+### `enrollment_request_package_members` (added 2026-09-12)
+| Column | Type | Nullable | Default |
+|---|---|---|---|
+| enrollment_request_package_id | uuid → `enrollment_request_packages.id`, `ON DELETE CASCADE` | NO | — | PK part 1 |
+| student_id | text → `students.id`, `ON DELETE CASCADE` | NO | — | PK part 2; also `idx_enrollment_request_package_members_student_id` |
+| created_at | timestamptz | NO | now() |
+
+The **other** children a shared package line is to be shared with. Never the student the request is for: they are a member by definition, and on a new-student enrollment they have no id until `review-enrollment-payment` creates them at confirm time — so the confirm step adds them alongside these rows. That keeps the row meaning the same thing on a renewal and on a first enrollment instead of being populated one way for each.
+
+`validate_enrollment_request_package_member()` (BEFORE INSERT OR UPDATE) refuses a row whose line doesn't exist, whose line isn't `is_shared`, or whose student is the one the request is already for. RLS is admin-only (`admin_all_enrollment_request_package_members`), the same gate as the line items; `select/insert/update/delete` granted to `authenticated` and `service_role`.
 
 ### `enrollment_request_payment_proofs` (added 2026-07-25)
 | Column | Type | Nullable | Default |
@@ -1306,6 +1389,8 @@ Fires `BEFORE INSERT OR UPDATE OR DELETE ON session_logs`. Blocks the operation 
 
 On the application side (`src/hooks/useStudentPackages.ts`), what used to be a single `assignSessionToPool()` function is now `resolvePendingSession` (resolves a still-`pool_ambiguous` session, writes the sticky resolution, sweeps other still-pending sessions matching the same key), `updatePoolResolutionTarget` (changes a resolution's target pool going forward — sweeps only currently-pending sessions, never an already-resolved one), and `createPoolResolution` (lets an admin/PC set up a (teacher, subject) → pool assignment proactively, before any session has even been logged against it). A fourth function, `reassignSingleSession` (moved *one* already-resolved session to a different pool), existed briefly but was **removed 2026-07-04** along with its UI — an already-logged session can no longer be moved to a different pool at all, by design. The `OLD.student_package_id IS NOT NULL` skip-resolution guard above still exists at the trigger level (it also protects a plain unrelated edit like fixing an hours typo from ever re-triggering resolution), even though nothing in the app can explicitly reassign a resolved session anymore.
 
+**As of 2026-09-11 / 2026-09-12**, everywhere the three lookups above say "the student's unlocked pools" they mean `id IN (SELECT student_package_ids(NEW.student_id))` — the student's own pools plus the **shared pools they are a named member of**. Membership, not parentage: a sibling left off a shared pool falls into the **0-candidates** branch above and gets a fresh zero-hour pool of their own, exactly as a student with no package at all would, rather than quietly spending hours that were sold for two other children. Verified live both ways (see the 2026-09-12 changelog entry). The zero-hour fallback pool stays **student**-owned for the same reason it always has.
+
 Now `SECURITY DEFINER SET search_path TO 'public'` (added with the 2026-07-02 rewrite) — a plain teacher has no RLS access to `student_packages` or `session_log_pool_resolutions`, but this trigger must read/write both regardless of who is logging the session, matching the pattern already used by `is_admin()`/`is_performance_coach()`/`sync_teacher_pc_role()`.
 
 ### `touch_updated_at()` / `touch_invoices_updated_at()` / `touch_student_packages_updated_at()` / `touch_package_allocations_updated_at()` → trigger
@@ -1441,6 +1526,8 @@ Security advisor flags the three *public* buckets as allowing public **listing**
 
 ### `course_types` (7 rows)
 Academic (green, active), Beyond Academic (orange, active), **College Counselling (sky, active — reactivated 2026-07-02)**, Edge (purple, inactive), General (navy, inactive), **Foundation Program (amber, active — reactivated 2026-07-02 for multi-pool packages; previously an inactive leftover from an abandoned taxonomy)**, **All-In-One (purple, active — added 2026-07-02 for multi-pool packages)**. Foundation Program and All-In-One are used only to group bundles of pools on the packages UI/invoices via `student_packages.package_type_id` — see the "Multi-pool packages" note under `student_packages` above; they are never a session's own `course_type_id`.
+
+**`is_shareable` (added 2026-09-12)** is true on exactly **Academic** and **Beyond Academic** — the only two programmes sold as hours a household shares between two children. College Counselling is false, and so are both bundles (each contains a College Counselling pool). `validate_shared_package_course_type()` refuses any parent-owned package whose course type is false.
 
 ### `subject_categories` (7 rows, only 1 active)
 Academic (academic, **active** — still used for the academic branch's own admin flows). **Passion Projects (beyond_academic, inactive — deactivated 2026-07-02, re-created as a plain `subjects` row instead)**, **Career Exploration (beyond_academic, inactive — deactivated 2026-07-02 the same day it was added, id 7, re-created as a plain `subjects` row instead)**, College Support (beyond_academic, inactive — deactivated 2026-07-02, superseded by the College Counselling program/course type; its 5 subjects — College Counselling, College Essays, Job Application Mentorship, Profile Building, Writing Development — were themselves inactive and were deleted 2026-07-02 in the inactive-cleanup pass, see note near the top of this file), Computer Science (beyond_academic, **inactive**), Communication skills (beyond_academic, **inactive**), Music (beyond_academic, **inactive**).
