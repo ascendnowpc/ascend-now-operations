@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AdminLayout } from "./AdminLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
@@ -9,7 +9,6 @@ import { ParentPicker } from "../../components/students/ParentPicker";
 import { useTeachers } from "../../hooks/useTeachers";
 import { invokeEdgeFunction, describeFunctionError } from "../../lib/edgeFunctions";
 import { invalidateCachePrefix } from "../../lib/cache";
-import { CURRICULUM_OPTIONS } from "../../components/portal/curriculumOptions";
 import type { Student } from "../../types/database";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -23,6 +22,12 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * confirmed; that flow is intact but switched off (INVOICE_PAYMENT_FLOW_ENABLED,
  * utils/enrollmentFlow.ts), and it is the right one when money is changing
  * hands.
+ *
+ * Asks for the five things a student record cannot do without — both names, the
+ * email that becomes their login, their coach, and the household — and nothing
+ * else. Curriculum, school, phone, address and the rest are the student's own to
+ * fill in at first login (StudentCompleteProfileGate); asking an admin to type
+ * them here only creates two places for the same fact to be wrong.
  *
  * No hours are bought here. A package belongs to a student who already exists,
  * so it is its own form — /admin/packages/new, which can give the hours to this
@@ -39,22 +44,20 @@ export default function AdminStudentFormPage() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [pcTeacherId, setPcTeacherId] = useState("");
-  const [parentId, setParentId] = useState<string | null>(null);
-  const [curriculum, setCurriculum] = useState("");
-  const [school, setSchool] = useState("");
+  // Returning from "+ New parent" is a real navigation, so this mounts fresh
+  // with ?parent=<id> — read it as the initial value rather than syncing it in
+  // with an effect.
+  const [parentId, setParentId] = useState<string | null>(searchParams.get("parent"));
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Returning from "+ New parent" — that route sends the admin back with
-  // ?parent=<id> so the family they just added is already selected.
-  const preselectParentId = searchParams.get("parent");
-  useEffect(() => {
-    if (preselectParentId) setParentId(preselectParentId);
-  }, [preselectParentId]);
-
   const emailValid = EMAIL_RE.test(email.trim());
-  const canSubmit = Boolean(firstName.trim()) && emailValid && !saving;
+  // Both names are required. The surname is half of how a student is
+  // identified — it seeds the mnemonic id, and every list, report and invoice
+  // reads "First Last" — so a blank one is never the right record to create.
+  // `create-student-with-user` enforces the same thing server-side.
+  const canSubmit = Boolean(firstName.trim()) && Boolean(lastName.trim()) && emailValid && !saving;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -72,8 +75,6 @@ export default function AdminStudentFormPage() {
         email: email.trim(),
         parent_id: parentId,
         pc_teacher_id: pcTeacherId || null,
-        curriculum: curriculum || null,
-        school: school.trim() || null,
       },
     });
     setSaving(false);
@@ -110,6 +111,7 @@ export default function AdminStudentFormPage() {
               label="Last name"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
+              required
             />
           </div>
 
@@ -149,17 +151,6 @@ export default function AdminStudentFormPage() {
             onChange={setParentId}
             returnTo="/admin/students/new"
           />
-
-          <div className="grid grid-cols-2 gap-4">
-            <SelectInput
-              label="Curriculum"
-              placeholder="Select…"
-              value={curriculum}
-              onChange={(e) => setCurriculum(e.target.value)}
-              options={CURRICULUM_OPTIONS.map((c) => ({ value: c, label: c }))}
-            />
-            <TextInput label="School" value={school} onChange={(e) => setSchool(e.target.value)} />
-          </div>
 
           {error && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">

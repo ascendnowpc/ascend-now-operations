@@ -12,9 +12,9 @@
 // teacher or an admin is created (create-teacher-with-user / create-admin-with-user).
 //
 // What this deliberately does NOT do: no invoice, no payment link, no payment
-// proof, no enrollment_requests row. Hours are added separately — and for a
-// family, on the parent rather than the student (see the 2026-09-11 family
-// packages migration).
+// proof, no enrollment_requests row. Hours are added separately, on
+// /admin/packages/new — to this student alone, or shared with one of their
+// siblings (see the 2026-09-12 shared package members migration).
 //
 // Deploy: supabase functions deploy create-student-with-user
 
@@ -96,7 +96,7 @@ serve(async (req) => {
     const body = await req.json();
     const {
       first_name,
-      last_name = "",
+      last_name,
       email,
       parent_id = null,
       pc_teacher_id = null,
@@ -111,8 +111,12 @@ serve(async (req) => {
     const lastName = String(last_name ?? "").trim();
     const studentEmail = String(email ?? "").trim();
 
-    if (!firstName || !studentEmail) {
-      return json({ error: "first_name and email are required" }, 400);
+    // Both names are required, not just the first. A surname is half of how a
+    // student is identified — it seeds the mnemonic id and every list, report
+    // and invoice reads "First Last" — so a blank one is never the right record
+    // to create. Enforced here as well as on the form so no caller can skip it.
+    if (!firstName || !lastName || !studentEmail) {
+      return json({ error: "first_name, last_name and email are required" }, 400);
     }
 
     // The guardian's name/phone are copied off the linked parent account, the
@@ -134,7 +138,7 @@ serve(async (req) => {
 
     const username = await uniqueUsername(serviceClient, usernameFromEmail(studentEmail));
     const password = passwordFromFirstName(firstName);
-    const fullName = `${firstName}${lastName ? " " + lastName : ""}`;
+    const fullName = `${firstName} ${lastName}`;
 
     // 1. Auth account — trg_create_user_profile writes the public.users row.
     const { data: authData, error: authError } = await serviceClient.auth.admin.createUser({
@@ -152,9 +156,7 @@ serve(async (req) => {
       .from("students")
       .insert({
         first_name: firstName,
-        // students.last_name is NOT NULL, so an omitted surname is stored as
-        // the empty string — the same thing the enrollment flow does, and the
-        // first-login gate is where the student fills it in.
+        // Rejected above if blank, so this is always a real surname.
         last_name: lastName,
         email: studentEmail,
         notification_email: notification_email || studentEmail,
@@ -227,7 +229,7 @@ async function sendWelcomeEmail(opts: {
     },
   });
 
-  const fullName = `${opts.first_name}${opts.last_name ? " " + opts.last_name : ""}`;
+  const fullName = `${opts.first_name} ${opts.last_name}`;
   const loginUrl = publicAppUrl ? `${publicAppUrl.replace(/\/$/, "")}/login` : null;
 
   await client.send({
