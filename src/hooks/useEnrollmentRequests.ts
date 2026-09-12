@@ -249,18 +249,47 @@ export function useEnrollmentRequests() {
     enrollmentRequestId: string;
     action: "confirm" | "reject" | "resend_rejection";
     rejectionReason?: string;
+    /**
+     * Create everything but email nobody. Used by the direct path below, where
+     * there was no invoice to answer and so nothing for the family to be told.
+     */
+    suppressEmails?: boolean;
   }) => {
     const { data, error } = await invokeEdgeFunction("review-enrollment-payment", {
       body: {
         enrollment_request_id: opts.enrollmentRequestId,
         action: opts.action,
         rejection_reason: opts.rejectionReason,
+        suppress_emails: opts.suppressEmails ?? false,
       },
     });
     if (error) return { data: null, error: await describeFunctionError(error) };
     if (data?.error) return { data: null, error: data.error as string };
     return { data, error: null };
   }, []);
+
+  /**
+   * Creates the student and their packages straight away, with no invoice,
+   * payment link, proof or approval in between — the path the Add / Renew form
+   * takes while `INVOICE_PAYMENT_FLOW_ENABLED` is off (see
+   * src/utils/enrollmentFlow.ts).
+   *
+   * It goes through the same `review-enrollment-payment` confirm the real flow
+   * uses rather than duplicating any of it, which is what keeps the two from
+   * drifting: student creation, bundle fan-out, shared pools, renewal
+   * auto-resolution and the per-line stamping are all the one implementation.
+   * The status hop to `payment_submitted` is what lets that function run
+   * untouched — its guard is "this request is awaiting review", which is
+   * exactly what an admin filling in this form is asserting.
+   */
+  const confirmWithoutPayment = useCallback(async (enrollmentRequestId: string) => {
+    const { error: statusErr } = await supabase
+      .from("enrollment_requests")
+      .update({ status: "payment_submitted" })
+      .eq("id", enrollmentRequestId);
+    if (statusErr) return { data: null, error: statusErr.message };
+    return reviewPayment({ enrollmentRequestId, action: "confirm", suppressEmails: true });
+  }, [reviewPayment]);
 
   // Quick-edit for a request still "Awaiting Payment" — lets an admin fix a
   // typo (wrong email, address, etc.) before the parent has paid, without
@@ -324,6 +353,7 @@ export function useEnrollmentRequests() {
     deleteEnrollmentRequest,
     sendInvoiceEmail,
     reviewPayment,
+    confirmWithoutPayment,
     getProofSignedUrl,
   };
 }

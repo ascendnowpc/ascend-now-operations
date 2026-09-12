@@ -46,6 +46,13 @@
 // so the parent can re-upload. The admin can supply their own custom
 // rejection note; a sensible default is used if they don't.
 //
+// suppress_emails (2026-09-12): confirm exactly as normal but email nobody —
+// no credentials, no renewal confirmation, no resolved-renewal notice to a PC.
+// The response then carries the new student's `credentials` instead, since no
+// welcome email went out to carry them. Used by the Add / Renew form's direct
+// path, where there was no invoice to answer and so nothing to tell a family
+// about; see INVOICE_PAYMENT_FLOW_ENABLED in src/utils/enrollmentFlow.ts.
+//
 // resend_rejection: for an already-rejected request, re-sends the exact
 // same rejection email (reason + payment link) without changing anything —
 // used by the Enrollments queue's "Resend Email" button on rejected rows.
@@ -146,7 +153,8 @@ serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    const { enrollment_request_id, action, rejection_reason } = await req.json();
+    const { enrollment_request_id, action, rejection_reason, suppress_emails } = await req.json();
+    const suppressEmails = suppress_emails === true;
     if (!enrollment_request_id || !["confirm", "reject", "resend_rejection"].includes(action)) {
       return json({ error: "enrollment_request_id and action ('confirm' | 'reject' | 'resend_rejection') are required" }, 400);
     }
@@ -954,11 +962,17 @@ ${totalRowHtml}
       }
     };
 
-    runInBackground(sendConfirmationEmails().catch((emailErr) => console.error("Failed to send confirmation email:", emailErr)));
+    if (!suppressEmails) {
+      runInBackground(sendConfirmationEmails().catch((emailErr) => console.error("Failed to send confirmation email:", emailErr)));
+    }
 
     return json({
       success: true,
       studentId,
+      // Only when no welcome email went out — otherwise the email is where the
+      // student's login comes from and there is no reason to put a password in
+      // an HTTP response.
+      credentials: suppressEmails ? credentials : undefined,
       packages: processedPackages.map((p) => ({
         packageRowId: p.packageRowId,
         studentPackageId: p.targetPackageId,

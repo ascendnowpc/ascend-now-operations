@@ -11,6 +11,11 @@ import { useTeachers } from "../../hooks/useTeachers";
 import { useCourseTypes } from "../../hooks/useCourseTypes";
 import { usePcAssignments } from "../../hooks/usePcAssignments";
 import { useEnrollmentRequests, type NewPackageInput } from "../../hooks/useEnrollmentRequests";
+import {
+  enrollmentSubmitPlan,
+  enrollmentOutcomeHeadline,
+  enrollmentOutcomeDetail,
+} from "../../utils/enrollmentFlow";
 import { ParentPicker } from "../../components/students/ParentPicker";
 import { useParents } from "../../hooks/useParents";
 import { applyParentToGuardianContact, childrenOf } from "../../utils/parentDirectory";
@@ -93,7 +98,10 @@ export default function AdminEnrollStudentPage() {
   const { teachers } = useTeachers();
   const { courseTypes } = useCourseTypes();
   const { getPcForStudent } = usePcAssignments();
-  const { createEnrollmentRequest, sendInvoiceEmail } = useEnrollmentRequests();
+  const { createEnrollmentRequest, sendInvoiceEmail, confirmWithoutPayment } = useEnrollmentRequests();
+  // Whether this form emails an invoice and waits, or creates the student and
+  // their packages there and then — one constant, see utils/enrollmentFlow.ts.
+  const submitPlan = enrollmentSubmitPlan();
   const { fetchPackagesForStudent } = useStudentPackages();
   const { poolDefsByBundle } = useBundlePoolSettings();
   // Only to resolve the picked parent's own name/phone at submit time. Looked
@@ -152,7 +160,7 @@ export default function AdminEnrollStudentPage() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [successInfo, setSuccessInfo] = useState<{ email: string; paymentUrl?: string } | null>(null);
+  const [successInfo, setSuccessInfo] = useState<{ headline: string; credentials?: { username: string; password: string } | null } | null>(null);
 
   // Set when /admin/parents/new sent the admin back here after creating a
   // family mid-enrollment — it reports the account and where its credentials
@@ -418,6 +426,35 @@ export default function AdminEnrollStudentPage() {
       return;
     }
 
+    const learnerName = `${input.first_name} ${input.last_name}`.trim();
+    const totalHours = packagesInfo.reduce((sum, info) => sum + info.hours, 0);
+
+    // The direct path: no invoice, no payment link, nothing emailed — the same
+    // confirm the Enrollments queue runs, called immediately. Everything about
+    // what gets created (bundle fan-out, shared pools, renewal auto-resolution)
+    // is that one implementation, so the two paths can't drift.
+    if (submitPlan.autoConfirm) {
+      const { data: confirmed, error: confirmError } = await confirmWithoutPayment(data.id);
+      setSaving(false);
+      if (confirmError) {
+        setError(`Request saved, but setting it up failed: ${confirmError}. You can still confirm it from the Enrollments queue.`);
+        return;
+      }
+      setSuccessInfo({
+        headline: enrollmentOutcomeHeadline({
+          learnerName,
+          studentId: (confirmed?.studentId as string | null) ?? selectedStudent?.id ?? null,
+          hours: totalHours,
+          packageCount: packageInputs.length,
+        }, submitPlan),
+        // Only ever present for a brand-new student, and only because no
+        // welcome email went out to carry them.
+        credentials: (confirmed?.credentials as { username: string; password: string } | null) ?? null,
+      });
+      resetForNewSubmission();
+      return;
+    }
+
     const coordinatorName =
       kind === "renewal" && selectedStudent
         ? teacherName(getPcForStudent(selectedStudent.id))
@@ -428,7 +465,7 @@ export default function AdminEnrollStudentPage() {
       parentFullName: input.parent_full_name ?? null,
       phoneNumber: input.phone_number ?? null,
       email: input.email,
-      learnerName: `${input.first_name} ${input.last_name}`,
+      learnerName,
       address: input.address ?? null,
       country: input.country ?? null,
       packages: packages.map((draft, i) => ({
@@ -455,7 +492,14 @@ export default function AdminEnrollStudentPage() {
     }
 
     const recipients = Array.from(new Set([data.email, data.student_email].filter((e): e is string => !!e)));
-    setSuccessInfo({ email: recipients.join(" and ") });
+    setSuccessInfo({
+      headline: enrollmentOutcomeHeadline({
+        learnerName,
+        recipients,
+        hours: totalHours,
+        packageCount: packageInputs.length,
+      }, submitPlan),
+    });
     resetForNewSubmission();
   }
 
@@ -478,8 +522,16 @@ export default function AdminEnrollStudentPage() {
 
       {successInfo && (
         <Card className="p-4 mb-6 border border-lime-200 bg-lime-50">
-          <p className="text-sm font-semibold text-lime-700">Invoice sent to {successInfo.email}.</p>
-          <p className="text-xs text-lime-600 mt-1">They'll receive the payment link by email. Once they upload proof of payment, review it from the Enrollments queue.</p>
+          <p className="text-sm font-semibold text-lime-700">{successInfo.headline}</p>
+          <p className="text-xs text-lime-600 mt-1">{enrollmentOutcomeDetail(submitPlan)}</p>
+          {successInfo.credentials && (
+            <p className="text-xs text-lime-700 mt-2">
+              Login{" "}
+              <span className="font-mono font-semibold">{successInfo.credentials.username}</span>
+              {" / "}
+              <span className="font-mono font-semibold">{successInfo.credentials.password}</span>
+            </p>
+          )}
         </Card>
       )}
 

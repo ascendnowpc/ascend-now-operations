@@ -7,7 +7,6 @@ import {
   IconPackage,
   IconBarChart,
   IconDownload,
-  IconPlus,
   IconBell,
   IconCoordinatorLog,
   IconGrid,
@@ -37,7 +36,9 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
     children: [
       { label: "Students", to: "/admin/students", icon: <IconUsers /> },
       { label: "Parents", to: "/admin/parents", icon: <IconUsers /> },
-      { label: "Add / Renew Student", to: "/admin/students/enroll", icon: <IconPlus /> },
+      // Adding or renewing a student is a header action on the Students list,
+      // not a sidebar destination of its own — it is something you do to the
+      // list you are looking at, like adding a teacher or an admin.
       { label: "Enrollments", to: "/admin/enrollments", icon: <IconClipboard /> },
       { label: "Learner's actual hours", to: "/admin/packages", icon: <IconPackage /> },
     ],
