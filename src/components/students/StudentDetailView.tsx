@@ -1213,7 +1213,7 @@ export function StudentDetailView({ role, backPath, backLabel }: {
           {isAdmin && (
             <div className="flex items-center justify-end mb-4">
               <button
-                onClick={() => navigate(`/admin/students/enroll?student=${student.id}`)}
+                onClick={() => navigate("/admin/packages/new")}
                 className="text-sm text-sky-500 hover:text-sky-700"
               >
                 Renew / Add hours →
@@ -1481,7 +1481,7 @@ export function StudentDetailView({ role, backPath, backLabel }: {
                 Hours are added by sending an invoice and confirming payment — they can't be entered directly here.
               </p>
               {isAdmin && (
-                <Button onClick={() => navigate(`/admin/students/enroll?student=${student.id}`)}>Send renewal invoice</Button>
+                <Button onClick={() => navigate("/admin/packages/new")}>Add package</Button>
               )}
             </div>
           ) : (

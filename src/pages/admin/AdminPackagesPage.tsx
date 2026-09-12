@@ -164,18 +164,9 @@ export default function AdminPackagesPage() {
         title="Learner's actual hours"
         description="Track hour balances across all students. Shared pools live on the family's own hours page; this view is read-only apart from locking a package generation."
         action={
-          <div className="flex gap-2">
-            <Button onClick={() => navigate("/admin/packages/new")} className="flex items-center gap-2">
-              <IconPlus /> Add package
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => navigate("/admin/students/enroll")}
-              className="flex items-center gap-2"
-            >
-              Add / Renew — send invoice
-            </Button>
-          </div>
+          <Button onClick={() => navigate("/admin/packages/new")} className="flex items-center gap-2">
+            <IconPlus /> Add package
+          </Button>
         }
       />
 
@@ -327,10 +318,10 @@ export default function AdminPackagesPage() {
                     </div>
                   </div>
                   <button
-                    onClick={() => navigate(`/admin/students/enroll?student=${student.id}`)}
+                    onClick={() => navigate("/admin/packages/new")}
                     className="text-sm text-sky-500 hover:text-sky-700 font-medium"
                   >
-                    Renew / Add hours →
+                    Add package →
                   </button>
                 </div>
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import type { PackageTopup, SessionLog, SessionLogPoolResolution, StudentPackage, Subject, Teacher } from "../types/database";
 import { computeHoursUsed, computeHoursUsedBySubject, computeHoursUsedByTeacher } from "../utils/packageHours";
+import { sameSharedMembers } from "../utils/sharedPackages";
 
 export const PRESET_HOURS = [16, 24, 32, 50, 100];
 
@@ -84,6 +85,31 @@ export function useStudentPackages() {
     return error?.message ?? null;
   }, []);
 
+  // The owner's CURRENT pool for a (course type, pool label), or null. Only ever
+  // matches the unlocked one: a locked generation is history, and the next
+  // purchase for that course type starts a fresh pool rather than reopening it.
+  // `pool_label` is matched as a value including null, since a bundle's
+  // default/unlabeled pool is a real pool and not "no pool".
+  const findOpenPool = useCallback(async (opts: {
+    ownerColumn: "student_id" | "parent_id";
+    ownerId: string;
+    courseTypeId: number;
+    poolLabel: string | null;
+  }) => {
+    let query = supabase
+      .from("student_packages")
+      .select("*")
+      .eq(opts.ownerColumn, opts.ownerId)
+      .eq("course_type_id", opts.courseTypeId)
+      .eq("is_locked", false);
+    query = opts.poolLabel == null
+      ? query.is("pool_label", null)
+      : query.eq("pool_label", opts.poolLabel);
+    const { data, error } = await query.maybeSingle();
+    if (error) return { data: null, error: error.message };
+    return { data: (data as StudentPackage | null) ?? null, error: null };
+  }, []);
+
   // Creates a SHARED pool: owned by the parent, drawn down by the two children
   // named in `studentIds` and by nobody else. Separate from
   // createIndividualPackage rather than a flag on it, because the two
@@ -91,11 +117,19 @@ export function useStudentPackages() {
   // (student_packages_one_owner) and a single function taking both ids would
   // just be a runtime error waiting to happen.
   //
-  // The membership rows go in before the hours do, and a package whose members
-  // are refused (a non-shareable course type, a child of another household, a
-  // third sibling — all enforced by triggers) is deleted again rather than
-  // left behind as an ownerless pool an admin would have to notice and clean
-  // up.
+  // Adds to the household's existing open pool of this (course type, label) if
+  // there is one and it is shared with the same children, and only starts a
+  // fresh pool when there isn't — the same find-or-create rule
+  // review-enrollment-payment applies on confirm, so hours added here and hours
+  // added from a confirmed invoice land in the same place rather than one of
+  // them colliding with the one-open-pool-per-owner index. Topping up a pool
+  // shared with a DIFFERENT pair is refused rather than guessed at: those hours
+  // would go somewhere nobody asked for and could not be taken back.
+  //
+  // On a brand-new pool the membership rows go in before the hours do, and a
+  // pool whose members are refused (a non-shareable course type, a child of
+  // another household, a third sibling — all enforced by triggers) is deleted
+  // again rather than left behind as a pool nobody can spend.
   const createSharedPackage = useCallback(async (opts: {
     parentId: string;
     studentIds: string[];
@@ -106,6 +140,36 @@ export function useStudentPackages() {
     note?: string | null;
     addedByUserId: string;
   }) => {
+    const { data: existing, error: findErr } = await findOpenPool({
+      ownerColumn: "parent_id",
+      ownerId: opts.parentId,
+      courseTypeId: opts.courseTypeId,
+      poolLabel: opts.poolLabel ?? null,
+    });
+    if (findErr) return { data: null, error: findErr };
+
+    if (existing) {
+      const { data: members, error: membersErr } = await supabase
+        .from("student_package_members")
+        .select("student_id")
+        .eq("student_package_id", existing.id);
+      if (membersErr) return { data: null, error: membersErr.message };
+      const have = (members ?? []).map((m) => m.student_id as string);
+      if (!sameSharedMembers(have, opts.studentIds)) {
+        return {
+          data: null,
+          error: `This family already has an open pool of that course type, shared by ${have.join(" and ") || "nobody"}. Lock it first, or add these hours to the same pair.`,
+        };
+      }
+      const topupErr = await addInitialHours({
+        packageId: existing.id,
+        initialHours: opts.initialHours,
+        note: opts.note,
+        addedByUserId: opts.addedByUserId,
+      });
+      return { data: existing, error: topupErr ? `Adding hours failed: ${topupErr}` : null };
+    }
+
     const { data, error } = await supabase
       .from("student_packages")
       .insert({
@@ -139,12 +203,18 @@ export function useStudentPackages() {
     });
     if (topupErr) return { data: pkg, error: `Package created but adding hours failed: ${topupErr}` };
     return { data: pkg, error: null };
-  }, [addInitialHours]);
+  }, [addInitialHours, findOpenPool]);
 
-  // Creates an INDIVIDUAL pool: owned by one student, nobody else draws on it.
-  // Any course type, including the bundles a shared package can't hold — the
-  // caller creates one of these per bundle pool, exactly as
+  // Adds hours to an INDIVIDUAL pool: owned by one student, nobody else draws
+  // on it. Any course type, including the bundles a shared package can't hold —
+  // the caller calls this once per bundle pool, exactly as
   // review-enrollment-payment does.
+  //
+  // Same find-or-create rule as the shared version above: an existing open pool
+  // of this (course type, label) is topped up, and a fresh generation only
+  // starts when there isn't one — so "add 50 Academic hours" works whether or
+  // not the student already has an Academic package, which is what an admin
+  // means by it either way.
   const createIndividualPackage = useCallback(async (opts: {
     studentId: string;
     courseTypeId: number;
@@ -154,6 +224,35 @@ export function useStudentPackages() {
     note?: string | null;
     addedByUserId: string;
   }) => {
+    const { data: existing, error: findErr } = await findOpenPool({
+      ownerColumn: "student_id",
+      ownerId: opts.studentId,
+      courseTypeId: opts.courseTypeId,
+      poolLabel: opts.poolLabel ?? null,
+    });
+    if (findErr) return { data: null, error: findErr };
+
+    if (existing) {
+      // A pool bought standalone before the bundle was can be the one a bundle
+      // line now matches — promote it into the bundle so it stops rendering
+      // outside one whose hours it holds. An idempotent no-op when it is
+      // already there; the same thing applyBundlePool does on confirm.
+      if (opts.packageTypeId != null && existing.package_type_id !== opts.packageTypeId) {
+        const { error: promoteErr } = await supabase
+          .from("student_packages")
+          .update({ package_type_id: opts.packageTypeId })
+          .eq("id", existing.id);
+        if (promoteErr) return { data: null, error: promoteErr.message };
+      }
+      const topupErr = await addInitialHours({
+        packageId: existing.id,
+        initialHours: opts.initialHours,
+        note: opts.note,
+        addedByUserId: opts.addedByUserId,
+      });
+      return { data: existing, error: topupErr ? `Adding hours failed: ${topupErr}` : null };
+    }
+
     const { data, error } = await supabase
       .from("student_packages")
       .insert({
@@ -175,7 +274,7 @@ export function useStudentPackages() {
     });
     if (topupErr) return { data: pkg, error: `Package created but adding hours failed: ${topupErr}` };
     return { data: pkg, error: null };
-  }, [addInitialHours]);
+  }, [addInitialHours, findOpenPool]);
 
   // Fetch or create the *current* package row for a student+course_type
   // combination — i.e. the unlocked one. A student can have any number of
