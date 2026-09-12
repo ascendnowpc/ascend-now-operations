@@ -10,11 +10,10 @@ import { StudentsListView } from "../../components/students/StudentsListView";
 // no per-row remove action here — reassigning a student between PCs happens on
 // /admin/pc-assignments instead.
 //
-// Two header actions, because there are two genuinely different jobs:
-//   * Add student — creates the student and their login there and then
-//     (/admin/students/new), the way every other role is added.
-//   * Add / Renew — the invoice → payment link → proof → confirm flow
-//     (/admin/students/enroll), for when money is actually changing hands.
+// One header action, and one way in: /admin/students/enroll. A second,
+// package-less "Add student" form existed alongside it until 2026-09-12 and was
+// removed — two forms that both created a student, only one of which could give
+// them any hours, is the kind of inconsistency nobody could keep straight.
 export default function AdminStudentsPage() {
   const navigate = useNavigate();
   const notice = (useLocation().state as { notice?: string } | null)?.notice ?? null;
@@ -25,14 +24,9 @@ export default function AdminStudentsPage() {
         title="Students"
         description="All registered students. Click a student to view details and edit."
         headerAction={
-          <div className="flex gap-2">
-            <Button className="flex items-center gap-2" onClick={() => navigate("/admin/students/new")}>
-              <IconPlus /> Add student
-            </Button>
-            <Button variant="ghost" onClick={() => navigate("/admin/students/enroll")}>
-              Add / Renew
-            </Button>
-          </div>
+          <Button className="flex items-center gap-2" onClick={() => navigate("/admin/students/enroll")}>
+            <IconPlus /> Add / Renew Student
+          </Button>
         }
         detailPath={(id) => `/admin/students/${id}`}
       >

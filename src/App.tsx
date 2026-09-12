@@ -49,7 +49,6 @@ import AdminEnrollmentsPage from "./pages/admin/AdminEnrollmentsPage";
 import AdminParentsPage from "./pages/admin/AdminParentsPage";
 import AdminParentFormPage from "./pages/admin/AdminParentFormPage";
 import AdminParentPackagesPage from "./pages/admin/AdminParentPackagesPage";
-import AdminStudentFormPage from "./pages/admin/AdminStudentFormPage";
 
 import TeacherHomeworkPage from "./pages/teacher/TeacherHomeworkPage";
 import TeacherHomeworkReviewPage from "./pages/teacher/TeacherHomeworkReviewPage";
@@ -282,14 +281,6 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <AdminSessionLogFormPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/students/new"
-            element={
-              <ProtectedRoute allowedRoles={["admin"]}>
-                <AdminStudentFormPage />
               </ProtectedRoute>
             }
           />
