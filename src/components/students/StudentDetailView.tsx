@@ -702,9 +702,10 @@ export function StudentDetailView({ role, backPath, backLabel }: {
   // has one, otherwise the plain fields stored on the student. Derived rather
   // than read straight off the row so the read-only view, the edit form, and
   // the account itself can never show three different answers.
+  const linkedParent = student.parent_id ? parents.find((p) => p.id === student.parent_id) ?? null : null;
   const guardianContact = applyParentToGuardianContact(
     { fullName: student.parent_full_name ?? "", phone: student.parent_phone_number ?? null },
-    student.parent_id ? parents.find((p) => p.id === student.parent_id) ?? null : null,
+    linkedParent,
   );
 
   // Active / On pause / Completed. An admin can move any student; a coach only
@@ -1172,11 +1173,7 @@ export function StudentDetailView({ role, backPath, backLabel }: {
                 ["Parent/Guardian Phone", guardianContact.phone],
                 [
                   "Parent account",
-                  (() => {
-                    if (!student.parent_id) return null;
-                    const p = parents.find((row) => row.id === student.parent_id);
-                    return p ? `${parentDisplayName(p)} (${p.id})` : student.parent_id;
-                  })(),
+                  linkedParent ? `${parentDisplayName(linkedParent)} (${linkedParent.id})` : student.parent_id,
                 ],
                 ["Student added date", new Date(student.created_at).toLocaleDateString()],
               ] as [string, string | null][]).map(([label, val]) => (
@@ -1209,6 +1206,50 @@ export function StudentDetailView({ role, backPath, backLabel }: {
             </dl>
           )}
         </Card>
+
+        {/* The linked household's own account. Separate from the guardian
+            name/phone above, which are plain fields on the student row and
+            exist whether or not the family has a login. Shown — and editable —
+            for a coach as well as an admin: a coach is the person a family
+            actually talks to, so they're the one who hears that a phone number
+            or a country has changed (RLS's staff_update_assigned_parents
+            confines the write to their own roster). */}
+        {linkedParent && (
+          <Card className="p-5">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <p className="font-semibold text-navy-700">Parent / Guardian Account</p>
+              <button
+                onClick={() => {
+                  const roleBase = isAdmin ? "/admin" : "/teacher";
+                  const returnTo = `${roleBase}/students/${student.id}`;
+                  navigate(
+                    `${roleBase}/parents/${linkedParent.id}/edit?returnTo=${encodeURIComponent(returnTo)}`,
+                  );
+                }}
+                className="text-sm text-sky-500 hover:text-sky-700"
+              >
+                Edit
+              </button>
+            </div>
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
+              {([
+                ["Parent ID", linkedParent.id],
+                ["Name", parentDisplayName(linkedParent)],
+                ["Email", linkedParent.email],
+                ["Phone", linkedParent.phone_number],
+                ["Country", linkedParent.country],
+                ["Profession", linkedParent.profession],
+              ] as [string, string | null][]).map(([label, val]) => (
+                <div key={label} className="flex gap-2">
+                  <dt className="text-navy-400 w-36 shrink-0">{label}</dt>
+                  <dd className="text-navy-700 font-medium break-all">
+                    {val ?? <span className="text-navy-300 italic">—</span>}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </Card>
+        )}
         </div>
       )}
 

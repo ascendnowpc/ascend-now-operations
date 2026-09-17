@@ -10,6 +10,8 @@ import {
   siblingColor,
   familyColorOrder,
   UNKNOWN_SIBLING_COLOR,
+  individualPackageUsage,
+  groupPackagesByOwnership,
   type SiblingUsage,
 } from "./familyPackages";
 import type { StudentPackage } from "../types/database";
@@ -352,5 +354,56 @@ describe("familyColorOrder — the same colours without sibling read access", ()
   it("is empty when nobody has used anything yet", () => {
     expect(familyColorOrder([])).toEqual([]);
     expect(familyColorOrder([[]])).toEqual([]);
+  });
+});
+
+describe("individualPackageUsage", () => {
+  const batu = { id: "BATO26-1", first_name: "Batu", last_name: "Ozcelik" };
+
+  it("reports a student-owned pool's hours as that one child's", () => {
+    expect(individualPackageUsage(pkg({ student_id: batu.id, hours_used: 12.5 }), batu)).toEqual([
+      { studentId: "BATO26-1", firstName: "Batu", lastName: "Ozcelik", sessions: 0, noShows: 0, hours: 12.5 },
+    ]);
+  });
+
+  it("still returns the child's row for an untouched pool, so the bar renders empty rather than absent", () => {
+    const rows = individualPackageUsage(pkg({ student_id: batu.id, hours_used: 0 }), batu);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].hours).toBe(0);
+  });
+
+  it("treats a null hours_used as zero", () => {
+    expect(individualPackageUsage(pkg({ student_id: batu.id, hours_used: null }), batu)[0].hours).toBe(0);
+  });
+
+  it("refuses to speak for a shared pool — those hours belong to whoever spent them", () => {
+    expect(individualPackageUsage(pkg({ parent_id: "OZCB26-1", hours_used: 87.5 }), batu)).toEqual([]);
+  });
+});
+
+describe("groupPackagesByOwnership", () => {
+  const own = pkg({ id: 1, student_id: "BATO26-1" });
+  const family = pkg({ id: 2, parent_id: "OZCB26-1" });
+  const own2 = pkg({ id: 3, student_id: "BATO26-1" });
+
+  it("puts a parent-owned pool in shared and a student-owned one in individual", () => {
+    const groups = groupPackagesByOwnership([own, family]);
+    expect(groups.individual.map((p) => p.id)).toEqual([1]);
+    expect(groups.shared.map((p) => p.id)).toEqual([2]);
+  });
+
+  it("keeps the caller's order within each group", () => {
+    const groups = groupPackagesByOwnership([own2, family, own]);
+    expect(groups.individual.map((p) => p.id)).toEqual([3, 1]);
+  });
+
+  it("returns two empty groups for no packages", () => {
+    expect(groupPackagesByOwnership([])).toEqual({ individual: [], shared: [] });
+  });
+
+  it("counts every package exactly once", () => {
+    const all = [own, family, own2];
+    const groups = groupPackagesByOwnership(all);
+    expect(groups.individual.length + groups.shared.length).toBe(all.length);
   });
 });

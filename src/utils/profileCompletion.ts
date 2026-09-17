@@ -1,4 +1,4 @@
-import type { Admin, Student, Teacher } from "../types/database";
+import type { Admin, Parent, Student, Teacher } from "../types/database";
 
 // A student's required-at-first-login fields — deliberately never required
 // at admin add/renewal time (see the enrollment form / enrollment_requests).
@@ -50,4 +50,15 @@ export function adminNeedsProfileCompletion(
   admin: Pick<Admin, "phone_number" | "country">
 ): boolean {
   return !admin.phone_number || !admin.country;
+}
+
+// A parent's required-at-first-login fields. An admin creates a parent account
+// from a name and an email alone (that is all `create-parent-with-user` needs
+// to send credentials), so country and profession have nowhere else to come
+// from — the parent's own first login is where they get collected, exactly as
+// phone/country are for a teacher and an admin above.
+export function parentNeedsProfileCompletion(
+  parent: Pick<Parent, "country" | "profession">
+): boolean {
+  return !parent.country || !parent.profession;
 }

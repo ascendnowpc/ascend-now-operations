@@ -77,6 +77,10 @@ export interface Parent {
   last_name: string;
   email: string | null; // where credentials were sent; also the duplicate check when adding a sibling
   phone_number: string | null;
+  // Asked at the parent's own first login (2026-09-17) — never collected when
+  // an admin creates the account, which only needs a name and an email.
+  country: string | null;
+  profession: string | null;
   user_id: string | null; // the login account, set by create-parent-with-user
   is_active: boolean;
   created_at: string;

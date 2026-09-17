@@ -116,7 +116,31 @@ export function useMyParent(userId: string | undefined) {
     return () => { cancelled = true; };
   }, [userId]);
 
-  return { parent, loading };
+  // The two fields a parent fills in for themselves at first login
+  // (ParentCompleteProfileGate) and can correct afterward from their Profile
+  // page. Deliberately narrow: name and email identify the account and are
+  // maintained by an admin, and `user_id` is refused outright by the
+  // `prevent_non_admin_parent_relink` trigger. RLS's `parents_update_own`
+  // scopes the write to the caller's own row.
+  async function updateMyParent(
+    fields: Partial<Pick<Parent, "country" | "profession" | "phone_number">>,
+  ) {
+    if (!parent) return { error: "No parent record loaded." };
+    const { data, error } = await supabase
+      .from("parents")
+      .update(fields)
+      .eq("id", parent.id)
+      .select()
+      .single();
+    if (error) return { error: error.message };
+    const row = (data as Parent | null) ?? null;
+    setParent(row);
+    if (userId) setCached(`myParent:${userId}`, row);
+    invalidateCachePrefix("parents:");
+    return { error: null };
+  }
+
+  return { parent, loading, updateMyParent };
 }
 
 /**
@@ -157,5 +181,27 @@ export function useMyChildren(parentId: string | null | undefined) {
     return () => { cancelled = true; };
   }, [parentId]);
 
-  return { children, loading };
+  // A parent filling in a young child's profile — the same fields the child
+  // would type into their own first-login form, from the parent's side
+  // (2026-09-17). RLS's `parents_update_own_children` scopes this to their own
+  // children, and `prevent_non_admin_student_relink` refuses any attempt to
+  // move the child to another household or login along the way.
+  async function updateChild(studentId: string, fields: Partial<Student>) {
+    const { data, error } = await supabase
+      .from("students")
+      .update(fields)
+      .eq("id", studentId)
+      .select()
+      .single();
+    if (error) return { error: error.message };
+    const row = data as Student;
+    const next = children.map((c) => (c.id === studentId ? row : c));
+    setChildren(next);
+    if (parentId) setCached(`myChildren:${parentId}`, next);
+    // The admin-facing list caches the same rows under its own key.
+    invalidateCachePrefix("students:");
+    return { error: null };
+  }
+
+  return { children, loading, updateChild };
 }

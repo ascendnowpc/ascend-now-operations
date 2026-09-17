@@ -1,4 +1,4 @@
-import type { StudentPackage } from "../types/database";
+import type { Student, StudentPackage } from "../types/database";
 import { idSeqNumber } from "./entityId";
 
 // Shared packages: a pool bought once by a parent and drawn down by the two
@@ -243,6 +243,62 @@ export function familyColorOrder(usageByPackage: Iterable<SiblingUsage[]>): stri
 /** Enrollment order, read straight off the trailing sequence number of the id. */
 function byEnrollmentOrder(a: string, b: string): number {
   return idSeqNumber(a) - idSeqNumber(b) || a.localeCompare(b);
+}
+
+/**
+ * The same usage rows for an INDIVIDUAL pool that the RPC returns for a shared
+ * one — one row, the owning child's, carrying the pool's whole `hours_used`.
+ *
+ * A student-owned pool has nobody to split between, so there is no aggregate
+ * to fetch: `hours_used` already is that child's figure (see studentHoursUsed).
+ * Shaping it like a shared pool's rows is what lets one usage bar serve both,
+ * rather than individual pools silently rendering nothing at all — which is
+ * exactly what /admin/parents/:id did until 2026-09-17.
+ *
+ * `sessions`/`no_shows` are 0 rather than a guess: the bar doesn't read them,
+ * and inventing a count would be worse than admitting there isn't one here.
+ */
+export function individualPackageUsage(
+  pkg: Pick<StudentPackage, "parent_id" | "hours_used">,
+  student: Pick<Student, "id" | "first_name" | "last_name">,
+): SiblingUsage[] {
+  if (isFamilyPackage(pkg)) return [];
+  return [
+    {
+      studentId: student.id,
+      firstName: student.first_name,
+      lastName: student.last_name,
+      sessions: 0,
+      noShows: 0,
+      hours: pkg.hours_used ?? 0,
+    },
+  ];
+}
+
+export interface PackageGroups<T> {
+  /** Pools bought for one child alone — `student_id` is set. */
+  individual: T[];
+  /** Pools the household shares — `parent_id` is set, two children draw on it. */
+  shared: T[];
+}
+
+/**
+ * Splits a child's pools into the ones that are theirs alone and the ones the
+ * family shares.
+ *
+ * The two answer different questions and so can't sensibly share a table: an
+ * individual pool's hours are this child's by definition, whereas a shared
+ * pool's belong to whichever sibling spent them and only make sense broken
+ * out per child. Order within each group is preserved, so a caller's own
+ * sorting survives.
+ */
+export function groupPackagesByOwnership<T extends Pick<StudentPackage, "parent_id">>(
+  packages: T[],
+): PackageGroups<T> {
+  return {
+    individual: packages.filter((p) => !isFamilyPackage(p)),
+    shared: packages.filter(isFamilyPackage),
+  };
 }
 
 export interface UsageColumn {

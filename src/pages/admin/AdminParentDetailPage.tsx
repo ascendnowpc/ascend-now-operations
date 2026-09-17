@@ -12,7 +12,7 @@ import { useCourseTypes } from "../../hooks/useCourseTypes";
 import { useAllPackages } from "../../hooks/useStudentPackages";
 import { useFamilyPackageUsage } from "../../hooks/useFamilyPackageUsage";
 import { childrenOf, parentDisplayName } from "../../utils/parentDirectory";
-import { siblingColorMap, siblingColor } from "../../utils/familyPackages";
+import { siblingColorMap, siblingColor, individualPackageUsage } from "../../utils/familyPackages";
 import {
   householdPackages,
   packagesForStudent,
@@ -34,6 +34,12 @@ import type { StudentPackage } from "../../types/database";
  * A shared pool is listed under BOTH children who draw on it, marked as shared
  * and with the colour-coded split of who spent what; the household total counts
  * it once, so the per-child lists and the total can't disagree.
+ *
+ * Every pool gets a usage bar, individual ones included (2026-09-17). The bar
+ * used to be the shared pools' alone, which read as if an individual pool had
+ * nothing to show — its hours simply have one owner, and that owner is the
+ * child whose card it sits on, so it draws in that child's colour with the
+ * per-child legend left off (the line above the bar already says whose it is).
  */
 export default function AdminParentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -220,15 +226,18 @@ export default function AdminParentDetailPage() {
                               )}
                             </div>
 
-                            {shared && (
-                              <div className="mt-3">
-                                <FamilyUsageBar
-                                  usage={usageByPackage.get(p.id) ?? []}
-                                  purchasedHours={p.total_hours_purchased ?? 0}
-                                  colors={colors}
-                                />
-                              </div>
-                            )}
+                            <div className="mt-3">
+                              <FamilyUsageBar
+                                usage={
+                                  shared
+                                    ? usageByPackage.get(p.id) ?? []
+                                    : individualPackageUsage(p, child)
+                                }
+                                purchasedHours={p.total_hours_purchased ?? 0}
+                                colors={colors}
+                                showLegend={shared}
+                              />
+                            </div>
                           </div>
                         );
                       })}

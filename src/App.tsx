@@ -57,6 +57,7 @@ import TeacherWholePaperReviewPage from "./pages/teacher/TeacherWholePaperReview
 import TeacherQuestionPhotoReviewPage from "./pages/teacher/TeacherQuestionPhotoReviewPage";
 import TeacherStudentsPage from "./pages/teacher/TeacherStudentsPage";
 import TeacherStudentDetailPage from "./pages/teacher/TeacherStudentDetailPage";
+import TeacherParentEditPage from "./pages/teacher/TeacherParentEditPage";
 import TeacherHoursPage from "./pages/teacher/TeacherHoursPage";
 import TeacherInvoicesPage from "./pages/teacher/TeacherInvoicesPage";
 import TeacherRenewalRequestsPage from "./pages/teacher/TeacherRenewalRequestsPage";
@@ -80,6 +81,7 @@ import StudentHomeworkAttemptPage from "./pages/student/StudentHomeworkAttemptPa
 
 import ParentChildrenPage from "./pages/parent/ParentChildrenPage";
 import ParentChildOverviewPage from "./pages/parent/ParentChildOverviewPage";
+import ParentChildDetailsPage from "./pages/parent/ParentChildDetailsPage";
 import ParentChildActivityPage from "./pages/parent/ParentChildActivityPage";
 import ParentChildSessionsPage from "./pages/parent/ParentChildSessionsPage";
 import ParentChildHomeworkPage from "./pages/parent/ParentChildHomeworkPage";
@@ -606,6 +608,19 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          {/* A coach edits the household of a student on their own roster.
+              There is no coach-facing parents list — this is reached from the
+              student's Parent/Guardian Account card, and RLS
+              (staff_update_assigned_parents) confines the write to that
+              roster. */}
+          <Route
+            path="/teacher/parents/:id/edit"
+            element={
+              <ProtectedRoute allowedRoles={["performance_coach", "college_counselor"]}>
+                <TeacherParentEditPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/teacher/renewal-requests"
             element={
@@ -748,6 +763,17 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["parent"]}>
                 <ParentChildOverviewPage />
+              </ProtectedRoute>
+            }
+          />
+          {/* The child's own details, filled in by the parent when the child
+              is too young to have done it themselves. Its own route, so the
+              card on /parent/children can open straight onto it. */}
+          <Route
+            path="/parent/children/:studentId/details"
+            element={
+              <ProtectedRoute allowedRoles={["parent"]}>
+                <ParentChildDetailsPage />
               </ProtectedRoute>
             }
           />

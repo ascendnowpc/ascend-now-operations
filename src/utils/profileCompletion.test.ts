@@ -3,11 +3,13 @@ import {
   studentNeedsProfileCompletion,
   teacherNeedsProfileCompletion,
   adminNeedsProfileCompletion,
+  parentNeedsProfileCompletion,
 } from "./profileCompletion";
 
 type StudentFields = Parameters<typeof studentNeedsProfileCompletion>[0];
 type TeacherFields = Parameters<typeof teacherNeedsProfileCompletion>[0];
 type AdminFields = Parameters<typeof adminNeedsProfileCompletion>[0];
+type ParentFields = Parameters<typeof parentNeedsProfileCompletion>[0];
 
 const completeStudent: StudentFields = {
   phone_number: "+91 90000 00000",
@@ -86,5 +88,27 @@ describe("adminNeedsProfileCompletion", () => {
 
   it("treats an empty string as missing", () => {
     expect(adminNeedsProfileCompletion({ ...completeAdmin, phone_number: "" })).toBe(true);
+  });
+});
+
+const completeParent: ParentFields = {
+  country: "United Arab Emirates",
+  profession: "Architect",
+};
+
+describe("parentNeedsProfileCompletion", () => {
+  it("does not prompt a parent whose country and profession are filled in", () => {
+    expect(parentNeedsProfileCompletion(completeParent)).toBe(false);
+  });
+
+  it.each(Object.keys(completeParent) as (keyof ParentFields)[])(
+    "prompts when %s is missing",
+    (field) => {
+      expect(parentNeedsProfileCompletion({ ...completeParent, [field]: null })).toBe(true);
+    }
+  );
+
+  it("treats an empty string as missing", () => {
+    expect(parentNeedsProfileCompletion({ ...completeParent, profession: "" })).toBe(true);
   });
 });

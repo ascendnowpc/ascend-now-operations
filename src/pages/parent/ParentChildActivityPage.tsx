@@ -17,7 +17,13 @@ import {
   noShowBreakdown,
 } from "../../utils/parentActivity";
 import { useFamilyPackageUsage } from "../../hooks/useFamilyPackageUsage";
-import { isFamilyPackage, familyUsageColumns, studentHoursUsed, studentPackageTotals } from "../../utils/familyPackages";
+import {
+  isFamilyPackage,
+  familyUsageColumns,
+  studentHoursUsed,
+  studentPackageTotals,
+  groupPackagesByOwnership,
+} from "../../utils/familyPackages";
 import type { Student, StudentPackage } from "../../types/database";
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -112,6 +118,20 @@ function ActivityView({ student }: { student: Student }) {
   });
   const isViewed = (studentId: string) => usageColumns.length > 1 && studentId === student.id;
 
+  // The two kinds of pool are shown as two tables rather than one, because
+  // they answer different questions: an individual pool's hours are this
+  // child's by definition, while a shared pool's only mean anything broken
+  // out per sibling.
+  const { individual: individualPackages, shared: sharedPackages } = groupPackagesByOwnership(packages);
+
+  const packageTitle = (p: StudentPackage) =>
+    `${courseTypeName(p.course_type_id)}${p.pool_label ? ` · ${p.pool_label}` : ""}`;
+
+  // Clamped per pool, matching every other package figure in the app: an
+  // overspent pool is 0 left, never a negative that offsets a healthy one.
+  const remainingHours = (p: StudentPackage) =>
+    Math.max((p.total_hours_purchased ?? 0) - (p.hours_used ?? 0), 0);
+
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -133,56 +153,103 @@ function ActivityView({ student }: { student: Student }) {
         />
       </div>
 
-      <Card className="p-5">
-        <h3 className="text-sm font-semibold text-navy-700 mb-3">Packages</h3>
-        {packages.length === 0 ? (
-          <p className="text-sm text-navy-400">No packages yet.</p>
-        ) : (
+      {individualPackages.length > 0 && (
+        <Card className="p-5">
+          <h3 className="text-sm font-semibold text-navy-700 mb-3">Individual packages</h3>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="text-left text-xs font-semibold text-navy-400 uppercase tracking-wide">
-                  <th className="py-2 pr-4">Package</th>
-                  <th className="py-2 pr-4 text-right">Purchased</th>
-                  {usageColumns.map((c) => (
-                    <th
-                      key={c.studentId}
-                      className={`py-2 px-3 text-right ${isViewed(c.studentId) ? "bg-sky-50 text-sky-600" : ""}`}
-                    >
-                      {c.firstName}
-                    </th>
-                  ))}
-                  <th className="py-2 text-right">Remaining</th>
+                <tr className="border-b border-navy-100 text-xs font-semibold uppercase tracking-wide text-navy-400">
+                  <th className="py-2 pr-4 text-left font-semibold">Package</th>
+                  <th className="py-2 px-3 text-right font-semibold whitespace-nowrap">Purchased</th>
+                  <th className="py-2 px-3 text-right font-semibold whitespace-nowrap">Used</th>
+                  <th className="py-2 pl-3 text-right font-semibold whitespace-nowrap">Remaining</th>
                 </tr>
               </thead>
               <tbody>
-                {packages.map((p) => (
-                  <tr key={p.id} className="border-t border-navy-50">
-                    <td className="py-2 pr-4 text-navy-700">
-                      {courseTypeName(p.course_type_id)}
-                      {p.pool_label ? <span className="text-navy-400"> · {p.pool_label}</span> : null}
+                {individualPackages.map((p) => (
+                  <tr key={p.id} className="border-b border-navy-50 last:border-b-0">
+                    <td className="py-2.5 pr-4 text-navy-700">{packageTitle(p)}</td>
+                    <td className="py-2.5 px-3 text-right tabular-nums text-navy-700 whitespace-nowrap">
+                      {formatHours(p.total_hours_purchased ?? 0)}
                     </td>
-                    <td className="py-2 pr-4 text-right text-navy-700">{formatHours(p.total_hours_purchased ?? 0)}</td>
-                    {usageColumns.map((c) => (
-                      <td
-                        key={c.studentId}
-                        className={`py-2 px-3 text-right ${
-                          isViewed(c.studentId) ? "bg-sky-50 text-sky-700 font-semibold" : "text-navy-700"
-                        }`}
-                      >
-                        {formatHours(studentHoursUsed(p, c.studentId, usageByPackage))}
-                      </td>
-                    ))}
-                    <td className="py-2 text-right font-semibold text-navy-700">
-                      {formatHours(Math.max((p.total_hours_purchased ?? 0) - (p.hours_used ?? 0), 0))}
+                    <td className="py-2.5 px-3 text-right tabular-nums text-navy-700 whitespace-nowrap">
+                      {formatHours(p.hours_used ?? 0)}
+                    </td>
+                    <td className="py-2.5 pl-3 text-right tabular-nums font-semibold text-navy-700 whitespace-nowrap">
+                      {formatHours(remainingHours(p))}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
-      </Card>
+        </Card>
+      )}
+
+      {/* A shared pool's hours belong to whichever sibling spent them, so this
+          table gives each child their own column — the viewed child's tinted,
+          since a parent flipping between siblings otherwise can't tell whose
+          page they are on. Purchased and Remaining stay the pool's, so a row
+          reads 100 purchased − 86.75 − 0.75 = 12.5 remaining across the
+          family. That is the whole reason these two tables are separate: an
+          individual pool has no such split to show, and the sibling columns
+          read as empty padding on it. */}
+      {sharedPackages.length > 0 && (
+        <Card className="p-5">
+          <h3 className="text-sm font-semibold text-navy-700 mb-3">Shared packages</h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-navy-100 text-xs font-semibold uppercase tracking-wide text-navy-400">
+                  <th className="py-2 pr-4 text-left font-semibold">Package</th>
+                  <th className="py-2 px-3 text-right font-semibold whitespace-nowrap">Purchased</th>
+                  {usageColumns.map((c) => (
+                    <th
+                      key={c.studentId}
+                      className={`py-2 px-3 text-right font-semibold whitespace-nowrap ${
+                        isViewed(c.studentId) ? "bg-sky-50 text-sky-600" : ""
+                      }`}
+                    >
+                      {c.firstName}
+                    </th>
+                  ))}
+                  <th className="py-2 pl-3 text-right font-semibold whitespace-nowrap">Remaining</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sharedPackages.map((p) => (
+                  <tr key={p.id} className="border-b border-navy-50 last:border-b-0">
+                    <td className="py-2.5 pr-4 text-navy-700">{packageTitle(p)}</td>
+                    <td className="py-2.5 px-3 text-right tabular-nums text-navy-700 whitespace-nowrap">
+                      {formatHours(p.total_hours_purchased ?? 0)}
+                    </td>
+                    {usageColumns.map((c) => (
+                      <td
+                        key={c.studentId}
+                        className={`py-2.5 px-3 text-right tabular-nums whitespace-nowrap ${
+                          isViewed(c.studentId) ? "bg-sky-50 text-sky-700 font-semibold" : "text-navy-700"
+                        }`}
+                      >
+                        {formatHours(studentHoursUsed(p, c.studentId, usageByPackage))}
+                      </td>
+                    ))}
+                    <td className="py-2.5 pl-3 text-right tabular-nums font-semibold text-navy-700 whitespace-nowrap">
+                      {formatHours(remainingHours(p))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {packages.length === 0 && (
+        <Card className="p-5">
+          <p className="text-sm text-navy-400">No packages yet.</p>
+        </Card>
+      )}
 
       {noShows.total > 0 && (
         <Card className="p-5">
@@ -224,11 +291,11 @@ function ActivityView({ student }: { student: Student }) {
                       {m.subjects.map((s) => (
                         <tr key={`${s.subjectId ?? "none"}:${s.curriculumId ?? "none"}`} className="border-b border-navy-50 last:border-b-0">
                           <td className="py-2 pr-4 text-navy-700">{subjectName(s.subjectId, s.curriculumId)}</td>
-                          <td className="py-2 pr-4 text-right text-navy-500 whitespace-nowrap">
+                          <td className="py-2 px-3 text-right text-navy-500 whitespace-nowrap">
                             {s.sessions} session{s.sessions !== 1 ? "s" : ""}
                             {s.noShows > 0 && ` · ${s.noShows} no-show${s.noShows !== 1 ? "s" : ""}`}
                           </td>
-                          <td className="py-2 text-right font-semibold text-navy-700 whitespace-nowrap">
+                          <td className="py-2 pl-3 text-right tabular-nums font-semibold text-navy-700 whitespace-nowrap">
                             {formatHours(s.hours)} hrs
                           </td>
                         </tr>
