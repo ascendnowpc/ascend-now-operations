@@ -9,10 +9,13 @@
 // is then picked (by id) on the enroll form for the first child and reused for
 // every sibling after that.
 //
-// Only first name, last name and email are required. The username and password
-// are derived the same way every other account in this system derives them
-// (email local part / "<firstname>@ascendnow") unless the caller overrides
-// them, so an admin never has to invent credentials.
+// Only first name, last name and email are required. Phone, country and
+// profession are optional — country/profession are normally left to the
+// parent's own first-login gate, since an admin rarely knows them, but are
+// accepted here for the admin who does. The username and password are derived
+// the same way every other account in this system derives them (email local
+// part / "<firstname>@ascendnow") unless the caller overrides them, so an
+// admin never has to invent credentials.
 //
 // Deploy: supabase functions deploy create-parent-with-user
 
@@ -106,6 +109,8 @@ serve(async (req) => {
       last_name,
       email,
       phone_number = null,
+      country = null,
+      profession = null,
       username: usernameOverride = null,
       password: passwordOverride = null,
     } = body;
@@ -167,6 +172,14 @@ serve(async (req) => {
         last_name: lastName,
         email: parentEmail,
         phone_number: phone_number || null,
+        // Both optional, and usually absent: an admin creating an account from
+        // an email rarely knows either, which is why the parent is asked for
+        // them at their own first login (ParentCompleteProfileGate). Accepted
+        // here so an admin who DOES know can save the parent the question —
+        // the gate keys on the columns being null, so a value supplied here
+        // simply means one less thing asked.
+        country: country || null,
+        profession: profession || null,
         user_id: userId,
       })
       .select()
