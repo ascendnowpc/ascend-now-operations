@@ -4,7 +4,8 @@ import { AdminLayout } from "./AdminLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
-import { TextInput, PhoneInput } from "../../components/ui/Input";
+import { TextInput, SelectInput, PhoneInput } from "../../components/ui/Input";
+import { COUNTRY_OPTIONS } from "../../data/countries";
 import { Spinner } from "../../components/ui/Spinner";
 import { ParentEditForm } from "../../components/parents/ParentEditForm";
 import { useParents, invalidateParentsCache } from "../../hooks/useParents";
@@ -21,9 +22,11 @@ import type { Parent } from "../../types/database";
  * last name, email — plus an optional phone. The login is derived and the
  * credentials emailed by the `create-parent-with-user` edge function, so an
  * admin never picks a username or password here. Country and profession are
- * deliberately absent from create: the parent fills those in themselves at
- * first login. They ARE editable below, via the shared `ParentEditForm` the
- * coach's own /teacher/parents/:id/edit route uses.
+ * offered but optional — the parent is asked for them at their own first login
+ * (`ParentCompleteProfileGate`), since an admin usually doesn't know them, and
+ * that gate keys on the columns being null, so anything filled in here just
+ * means one less question for the parent. Editing goes through the shared
+ * `ParentEditForm` the coach's own /teacher/parents/:id/edit route uses.
  *
  * `?returnTo=` lets the enroll form send an admin here mid-enrollment to add
  * a family that isn't in the system yet; on save it goes back there with the
@@ -44,6 +47,8 @@ export default function AdminParentFormPage() {
   const [email, setEmail] = useState("");
   const [dialCode, setDialCode] = useState("+971");
   const [phone, setPhone] = useState("");
+  const [country, setCountry] = useState("");
+  const [profession, setProfession] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +73,8 @@ export default function AdminParentFormPage() {
         last_name: lastName.trim(),
         email: email.trim(),
         phone_number: joinPhoneNumber(dialCode, phone),
+        country: country || null,
+        profession: profession.trim() || null,
       },
     });
     setSaving(false);
@@ -161,6 +168,25 @@ export default function AdminParentFormPage() {
           onDialCodeChange={setDialCode}
           phoneNumber={phone}
           onPhoneNumberChange={setPhone}
+        />
+      </div>
+
+      {/* Optional, and usually left blank — an admin creating an account from
+          an email rarely knows either, which is why the parent is asked for
+          them at their own first login. Filling one in here simply means the
+          gate has one less thing to ask. */}
+      <div className="grid grid-cols-2 gap-4">
+        <SelectInput
+          label="Country"
+          placeholder="Select a country"
+          value={country}
+          onChange={(e) => setCountry(e.target.value)}
+          options={COUNTRY_OPTIONS}
+        />
+        <TextInput
+          label="Profession"
+          value={profession}
+          onChange={(e) => setProfession(e.target.value)}
         />
       </div>
     </>
