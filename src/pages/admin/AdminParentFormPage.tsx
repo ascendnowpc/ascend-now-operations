@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AdminLayout } from "./AdminLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
@@ -6,9 +6,10 @@ import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { TextInput, PhoneInput } from "../../components/ui/Input";
 import { Spinner } from "../../components/ui/Spinner";
+import { ParentEditForm } from "../../components/parents/ParentEditForm";
 import { useParents, invalidateParentsCache } from "../../hooks/useParents";
 import { invokeEdgeFunction, describeFunctionError } from "../../lib/edgeFunctions";
-import { splitPhoneNumber, joinPhoneNumber } from "../../utils/phoneNumber";
+import { joinPhoneNumber } from "../../utils/phoneNumber";
 import { findParentByEmail, parentDisplayName } from "../../utils/parentDirectory";
 import type { Parent } from "../../types/database";
 
@@ -19,7 +20,10 @@ import type { Parent } from "../../types/database";
  * Create collects only what a parent account actually needs — first name,
  * last name, email — plus an optional phone. The login is derived and the
  * credentials emailed by the `create-parent-with-user` edge function, so an
- * admin never picks a username or password here.
+ * admin never picks a username or password here. Country and profession are
+ * deliberately absent from create: the parent fills those in themselves at
+ * first login. They ARE editable below, via the shared `ParentEditForm` the
+ * coach's own /teacher/parents/:id/edit route uses.
  *
  * `?returnTo=` lets the enroll form send an admin here mid-enrollment to add
  * a family that isn't in the system yet; on save it goes back there with the
@@ -40,23 +44,9 @@ export default function AdminParentFormPage() {
   const [email, setEmail] = useState("");
   const [dialCode, setDialCode] = useState("+971");
   const [phone, setPhone] = useState("");
-  const [loaded, setLoaded] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Fill the edit form once the row arrives, then leave it alone so typing
-  // isn't overwritten by a later refetch.
-  useEffect(() => {
-    if (!existing || loaded) return;
-    const split = splitPhoneNumber(existing.phone_number);
-    setFirstName(existing.first_name);
-    setLastName(existing.last_name);
-    setEmail(existing.email ?? "");
-    setDialCode(split.dialCode);
-    setPhone(split.number);
-    setLoaded(true);
-  }, [existing, loaded]);
 
   // Warn before submitting when the address already belongs to a family —
   // adding a sibling means picking that parent, not making a second account.
@@ -106,28 +96,30 @@ export default function AdminParentFormPage() {
     navigate("/admin/parents", { state: { notice } });
   }
 
-  async function handleEdit(e: FormEvent) {
-    e.preventDefault();
-    if (!existing) return;
-    setSaving(true);
-    setError(null);
+  async function handleEdit(fields: {
+    first_name: string;
+    last_name: string;
+    email: string | null;
+    phone_number: string | null;
+    country: string | null;
+    profession: string | null;
+  }) {
+    if (!existing) return { error: "That parent no longer exists." };
 
     // Only the parents row is edited here. The login email on `users` /
     // `auth.users` is deliberately not touched — changing that is the
     // update-user-email flow, and doing it silently from this form would
     // break the account's own sign-in (username resolves through it).
-    const { error: updateErr } = await updateParent(existing.id, {
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
-      email: email.trim() || null,
-      phone_number: joinPhoneNumber(dialCode, phone),
-    });
-    setSaving(false);
-    if (updateErr) { setError(updateErr); return; }
+    const { error: updateErr } = await updateParent(existing.id, fields);
+    if (updateErr) return { error: updateErr };
 
-    navigate("/admin/parents", {
-      state: { notice: `Updated ${firstName.trim()} ${lastName.trim()}'s details.` },
+    // `?returnTo=` matters on edit too, not just create: the Edit control on a
+    // student's Parent/Guardian Account card sends an admin here and expects
+    // to get them back to that student rather than to the parents list.
+    navigate(returnTo ?? "/admin/parents", {
+      state: { notice: `Updated ${fields.first_name} ${fields.last_name}'s details.` },
     });
+    return { error: null };
   }
 
   const canSubmit = Boolean(firstName.trim() && lastName.trim() && email.trim()) && !duplicate;
@@ -220,21 +212,13 @@ export default function AdminParentFormPage() {
       )}
 
       {isEditing && existing && (
-        <Card className="p-6 max-w-2xl">
-          <form onSubmit={handleEdit} className="flex flex-col gap-4">
-            {nameFields}
-            {errorBox}
-            <div className="flex gap-3 mt-2">
-              <Button type="submit" disabled={saving || !firstName.trim() || !lastName.trim()}>
-                {saving ? "Saving…" : "Save changes"}
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => navigate("/admin/parents")}>
-                Cancel
-              </Button>
-            </div>
-          </form>
-        </Card>
+        <ParentEditForm
+          parent={existing}
+          onSave={handleEdit}
+          onCancel={() => navigate(returnTo ?? "/admin/parents")}
+        />
       )}
+
     </AdminLayout>
   );
 }

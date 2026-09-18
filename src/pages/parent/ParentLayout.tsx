@@ -7,9 +7,14 @@ import {
   IconClipboard,
   IconPencil,
   IconTeacher,
+  IconUser,
 } from "../../components/ui/icons";
 import { Spinner } from "../../components/ui/Spinner";
 import { useHasAssignedCc } from "../../hooks/useAssignedCcProfile";
+import { useAuth } from "../../context/AuthContext";
+import { useMyParent } from "../../hooks/useParents";
+import { parentNeedsProfileCompletion } from "../../utils/profileCompletion";
+import { ParentCompleteProfileGate } from "../../components/portal/ParentCompleteProfileGate";
 import type { Student } from "../../types/database";
 
 /**
@@ -36,6 +41,11 @@ export function ParentLayout({
   // appears once this child actually has one — same rule the student's own
   // sidebar follows.
   const { hasCc } = useHasAssignedCc(student?.id);
+  // Resolved here rather than passed in, because the gate below has to cover
+  // every parent route including the ones that never look at the parent row
+  // themselves. Cached by useMyParent, so this costs nothing per navigation.
+  const { session } = useAuth();
+  const { parent, loading: parentLoading, updateMyParent } = useMyParent(session?.user?.id);
 
   const base = student ? `/parent/children/${student.id}` : null;
 
@@ -48,6 +58,7 @@ export function ParentLayout({
             icon: <IconUsers />,
             children: [
               { label: "Overview", to: base, icon: <IconGrid /> },
+              { label: "Details", to: `${base}/details`, icon: <IconUser /> },
               { label: "Activity", to: `${base}/activity`, icon: <IconBarChart /> },
               { label: "Session Logs", to: `${base}/sessions`, icon: <IconClipboard /> },
               { label: "Homework", to: `${base}/homework`, icon: <IconPencil /> },
@@ -61,6 +72,15 @@ export function ParentLayout({
     // Profile isn't a tab — it hangs off the sidebar footer's identity block,
     // the same as every other role.
   ];
+
+  // Mandatory first-login gate — an admin creates a parent account from a
+  // name and an email, so country/profession have nowhere else to come from.
+  // Gated on `!parentLoading` for the same reason the student's is: each
+  // parent page re-mounts this layout, and a flash of the gate between
+  // navigations would be worse than a moment of the shell.
+  if (!parentLoading && parent && parentNeedsProfileCompletion(parent)) {
+    return <ParentCompleteProfileGate parent={parent} updateMyParent={updateMyParent} />;
+  }
 
   return (
     <DashboardShell navItems={navItems} roleLabel="Parent" profileTo="/parent/profile">

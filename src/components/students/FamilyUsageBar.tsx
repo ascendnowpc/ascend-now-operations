@@ -16,6 +16,13 @@ interface FamilyUsageBarProps {
    * dashboard. Their slice is marked "You" so a shared bar reads at a glance.
    */
   highlightStudentId?: string | null;
+  /**
+   * The per-child chips under the bar. Worth hiding on a pool with only one
+   * child on it, where the card already says whose it is and how many hours
+   * went — a lone chip there repeats the line above it rather than splitting
+   * anything. An overspend is still called out either way.
+   */
+  showLegend?: boolean;
 }
 
 /**
@@ -36,6 +43,7 @@ export function FamilyUsageBar({
   purchasedHours,
   colors,
   highlightStudentId = null,
+  showLegend = true,
 }: FamilyUsageBarProps) {
   const split = packageUsageSplit(usage, purchasedHours);
 
@@ -58,8 +66,9 @@ export function FamilyUsageBar({
         ))}
       </div>
 
+      {(showLegend || split.overspent) && (
       <div className="flex flex-wrap gap-1.5">
-        {split.slices.map((s) => (
+        {showLegend && split.slices.map((s) => (
           <span
             key={s.studentId}
             className={`inline-flex items-center gap-1.5 rounded-pill border px-2 py-0.5 text-xs font-medium ${
@@ -77,6 +86,7 @@ export function FamilyUsageBar({
           </span>
         )}
       </div>
+      )}
     </div>
   );
 }

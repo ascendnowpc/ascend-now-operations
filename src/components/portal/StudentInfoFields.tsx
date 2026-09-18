@@ -97,10 +97,16 @@ export function StudentInfoFields({
   value,
   onChange,
   required,
+  // The first section's heading. "Your details" when the student is filling
+  // their own form; a parent filling it for a young child passes "Student
+  // details" instead, since none of it is theirs. Every other label reads the
+  // same from either side.
+  detailsLabel = "Your details",
 }: {
   value: StudentInfoValue;
   onChange: (next: StudentInfoValue) => void;
   required?: boolean;
+  detailsLabel?: string;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -108,7 +114,7 @@ export function StudentInfoFields({
           country never touches the phone's dial code), since a student may
           live somewhere but carry a number from elsewhere. */}
       <div>
-        <SectionLabel>Your details</SectionLabel>
+        <SectionLabel>{detailsLabel}</SectionLabel>
         <div className="flex flex-col gap-3">
           <div>
             <label className="block text-xs font-medium text-navy-500 mb-1">
@@ -260,11 +266,17 @@ function InfoRow({ label, value }: { label: string; value: string | null }) {
 // StudentInfoFields once isStudentInfoValueComplete() is true. Mirrors the
 // same three grouped sections as the editable form above, so the page
 // looks the same whether a field is still open for editing or locked.
-export function StudentInfoReadOnly({ student }: { student: StudentInfoSource }) {
+export function StudentInfoReadOnly({
+  student,
+  detailsLabel = "Your details",
+}: {
+  student: StudentInfoSource;
+  detailsLabel?: string;
+}) {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <SectionLabel>Your details</SectionLabel>
+        <SectionLabel>{detailsLabel}</SectionLabel>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
           <InfoRow label="Country" value={student.country} />
           <InfoRow label="Student phone number" value={student.phone_number} />

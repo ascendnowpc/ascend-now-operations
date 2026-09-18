@@ -1,10 +1,11 @@
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ParentLayout } from "./ParentLayout";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { Card } from "../../components/ui/Card";
 import { useAuth } from "../../context/AuthContext";
 import { useMyParent, useMyChildren } from "../../hooks/useParents";
 import { StudentStatusBadge } from "../../components/students/StudentStatusControls";
+import { studentNeedsProfileCompletion } from "../../utils/profileCompletion";
 import type { Student } from "../../types/database";
 
 /**
@@ -14,9 +15,15 @@ import type { Student } from "../../types/database";
  * This page is the reason the parent role exists as its own login rather than
  * being folded into the student dashboard — it's the one view that spans
  * siblings.
+ *
+ * A child whose profile is still incomplete opens straight onto the form that
+ * fills it in instead of their dashboard (2026-09-17). For a young child the
+ * parent is the only person who can answer any of it, and their own dashboard
+ * is blocked behind the same fields until someone does.
  */
 export default function ParentChildrenPage() {
   const navigate = useNavigate();
+  const notice = (useLocation().state as { notice?: string } | null)?.notice ?? null;
   const { session } = useAuth();
   const { parent, loading: parentLoading } = useMyParent(session?.user?.id);
   const { children, loading: childrenLoading } = useMyChildren(parent?.id);
@@ -24,7 +31,8 @@ export default function ParentChildrenPage() {
   const loading = parentLoading || childrenLoading;
 
   function openChild(student: Student) {
-    navigate(`/parent/children/${student.id}`);
+    const base = `/parent/children/${student.id}`;
+    navigate(studentNeedsProfileCompletion(student) ? `${base}/details` : base);
   }
 
   return (
@@ -39,6 +47,12 @@ export default function ParentChildrenPage() {
           ) : undefined
         }
       />
+
+      {notice && (
+        <p className="text-sm text-lime-700 bg-lime-50 border border-lime-100 rounded-lg px-3 py-2 mb-4">
+          {notice}
+        </p>
+      )}
 
       {!parent ? (
         <Card className="p-5">
@@ -69,7 +83,14 @@ export default function ParentChildrenPage() {
                   </p>
                   <p className="font-mono text-xs text-sky-500 mt-0.5">{child.id}</p>
                 </div>
-                <StudentStatusBadge status={child.status} />
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <StudentStatusBadge status={child.status} />
+                  {studentNeedsProfileCompletion(child) && (
+                    <span className="rounded-pill bg-amber-50 border border-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                      Details needed
+                    </span>
+                  )}
+                </div>
               </div>
               <dl className="mt-4 flex flex-col gap-1.5 text-sm">
                 {(
