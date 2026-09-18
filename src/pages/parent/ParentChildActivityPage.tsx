@@ -286,11 +286,25 @@ function ActivityView({ student }: { student: Student }) {
                   </p>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
+                  {/* Each month is its own table, so without fixed column
+                      widths every month sizes its columns to its OWN longest
+                      row — "9 sessions · 2 no-shows" in one month and
+                      "1 session" in the next land the column in two different
+                      places, and the page reads as ragged even though each
+                      table is internally aligned. table-fixed + this colgroup
+                      makes every month compute the same three widths. */}
+                  <table className="min-w-full table-fixed text-sm">
+                    <colgroup>
+                      <col />
+                      <col className="w-52" />
+                      <col className="w-24" />
+                    </colgroup>
                     <tbody>
                       {m.subjects.map((s) => (
                         <tr key={`${s.subjectId ?? "none"}:${s.curriculumId ?? "none"}`} className="border-b border-navy-50 last:border-b-0">
-                          <td className="py-2 pr-4 text-navy-700">{subjectName(s.subjectId, s.curriculumId)}</td>
+                          <td className="py-2 pr-4 text-navy-700 truncate" title={subjectName(s.subjectId, s.curriculumId)}>
+                            {subjectName(s.subjectId, s.curriculumId)}
+                          </td>
                           <td className="py-2 px-3 text-right text-navy-500 whitespace-nowrap">
                             {s.sessions} session{s.sessions !== 1 ? "s" : ""}
                             {s.noShows > 0 && ` · ${s.noShows} no-show${s.noShows !== 1 ? "s" : ""}`}

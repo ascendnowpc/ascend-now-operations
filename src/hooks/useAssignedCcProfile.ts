@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { getCached, setCached } from "../lib/cache";
 import type { PcProfile } from "../types/database";
 
 interface AssignedCc {
@@ -76,14 +77,32 @@ export function useAssignedCcProfile(studentId: string | null | undefined) {
   return { assignedCc: data, loading };
 }
 
+// The last answer seen this session, per student. Separate from the 60s
+// `cache` below and deliberately never expiring: the cache decides whether to
+// re-ASK, this decides what to RENDER while asking. Without it the Counsellor
+// tab blinks out of the sidebar on every navigation — see the hook below.
+const lastKnownHasCc = new Map<string, boolean>();
+
 /**
- * Just "does this student have a live counsellor" — what the student sidebar
- * needs to decide whether to show the My CC tab at all. One small query rather
- * than the full profile chain above, since the layout re-mounts on every nav.
+ * Just "does this student have a live counsellor" — what the student and
+ * parent sidebars need to decide whether to show the Counsellor tab at all.
+ * One small query rather than the full profile chain above.
+ *
+ * Both layouts re-mount on every navigation (each page renders its own
+ * layout), so a fresh `useState(false)` here meant the tab disappeared and
+ * came back on every single click — the answer was already known, it just
+ * wasn't kept anywhere. Two things fix that, and they do different jobs:
+ * `lastKnownHasCc` seeds the first render so the tab never blinks, and the
+ * shared 60s cache decides whether to re-query at all. When the cache has
+ * expired the previous answer stays on screen while the new one is in
+ * flight, rather than being replaced by a guess of "no".
  */
 export function useHasAssignedCc(studentId: string | null | undefined) {
-  const [hasCc, setHasCc] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const cached = studentId ? getCached<boolean>(`hasCc:${studentId}`) : undefined;
+  const [hasCc, setHasCc] = useState(
+    studentId ? lastKnownHasCc.get(studentId) ?? false : false,
+  );
+  const [loading, setLoading] = useState(cached === undefined);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,6 +111,20 @@ export function useHasAssignedCc(studentId: string | null | undefined) {
       setLoading(false);
       return;
     }
+
+    // Switching child: show what we last knew about THIS one immediately,
+    // rather than carrying the sibling's answer over.
+    const seed = lastKnownHasCc.get(studentId);
+    if (seed !== undefined) setHasCc(seed);
+
+    const key = `hasCc:${studentId}`;
+    const fresh = getCached<boolean>(key);
+    if (fresh !== undefined) {
+      setHasCc(fresh);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     supabase
       .from("cc_student_assignments")
@@ -101,7 +134,10 @@ export function useHasAssignedCc(studentId: string | null | undefined) {
       .limit(1)
       .then(({ data }) => {
         if (cancelled) return;
-        setHasCc((data ?? []).length > 0);
+        const next = (data ?? []).length > 0;
+        setCached(key, next);
+        lastKnownHasCc.set(studentId, next);
+        setHasCc(next);
         setLoading(false);
       });
     return () => { cancelled = true; };
